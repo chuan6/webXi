@@ -2,6 +2,8 @@
 use warnings;
 use strict;
 
+# out of the sorted (by last_visit_time) table, select the entries that have the same last_visit_time attribute values, and group them
+
 open my $IN, "<", "../history_2_major.txt" or die "Can't open input file: $!";
 open my $OUT, ">", "../AtTheSameTime.txt" or die "Can't open output file: $!";
 

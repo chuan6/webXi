@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 
+# change from `|| ||` separated to `,` separated, and fill empty slots with `?`s
+
 open(my $IN, "<", "../1-1.txt") or die "Can't open the file: $!";
 open(my $OUT, ">", "../2-2.txt") or die "Can't open the file: $!";
 

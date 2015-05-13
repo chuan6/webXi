@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 
+# query component of url is not relavant to the analysis, and is cut to protect privacy
+
 open(my $IN, "<", "../3-1.arff") or die "Can't open the file: $!";
 open(my $OUT, ">", "../3withoutquery.arff") or die "Can't open the file: $!";
 
