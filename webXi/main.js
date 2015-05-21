@@ -39,148 +39,112 @@ function cons_tbody(data) {
         x = data.rows[i];
         for (j = 0; j < ncols; j++) {
             td = document.createElement("td");
-            td.textContent = String(x[j]);
+            if (x[j] + 0 === x[j]) { //x[j] is a number
+                td.textContent = String(x[j]);
+                td.style.textAlign = "right"; //left-align a number
+            } else {
+                td.textContent = String(x[j]);
+            }
             tr.appendChild(td);
         }
         tbody.appendChild(tr);
+        data.rows[i].html = tr;
     }
     return tbody;
 }
 
-var sample = {
-    cols: ["id", "url", "lastVisitTime", "title", "visitCount", "typedCount"],
-    rows: [
-        ["1", "https://github.com/chuan6", "chuan6(chuan6)", 123457895, 32, 12],
-        ["2", "https://www.google.com", "Google Search", 123457700, 76, 3],
-        ["5", "https://www.arstechnica.com", "Ars Technica", 123452345, 20, 18],
-        ["3", "https://www.apple.com", "Apple", 12345800, 4, 2],
-        ["6", "https://www.baidu.com", "Baidu", 1234514364, 2, 1],
-        ["2", "http://www.theverge.com", "The Verge", 123457890, 14, 4]
-    ]
-};
-var table = document.createElement("table");
-table.appendChild(cons_colgroup(sample));
-table.appendChild(cons_thead(sample));
-table.appendChild(cons_tbody(sample));
-document.body.appendChild(table);
-
-var do_test_query_urls = function (table) {
-    var hitems = do_query(test_query_urls, table);
-    var i, n = hitems.length;
-    appendDOM(body, "p", n.toString() + " records");
+function batchAddEventListener(elems, event, handler) {
+    var n = elems.length, i;
     for (i = 0; i < n; i++) {
-        appendDOM(body, "div", JSON.stringify(hitems[i]));
+        elems[i].addEventListener(event, handler);
     }
-};
+}
 
 var millisecondsPerWeek = 1000 * 60 * 60 * 24 * 7;
 var now = (new Date()).getTime();
 var oneWeekAgo = now - millisecondsPerWeek;
 var oneMonthAgo = now - millisecondsPerWeek*4;
-
-chrome.app.runtime.onLaunched.addListener(function() {
-    chrome.app.window.create('index.html',
-        {'bounds': {'width': 400, 'height': 500}});
-    chrome.history.search({
+chrome.history.search(
+    {
         text: "",
-        startTime: oneMonthAgo,
+        startTime: oneWeekAgo,
         endTime: now,
-        maxResults: 1000000},
-        do_test_query_urls);
-});
+        maxResults: 1000000
+    },
+    function (v) {
+        var cs = ["id", "url", "title", "lastVisitTime", "visitCount", "typedCount"],
+            rs = [],
+            m = v.length, n = cs.length,
+            i, j, x, y, r, data,
+            table, theads, tbody;
 
-// make side-effect over an array
-function iterator(func) {
-    return (
-        function (arr) {
-            for (var i=0; i < arr.length; i++) {
-                func(arr[i]);
+        for (i = 0; i < m; i++) {
+            r = [];
+            x = v[i];
+            for (j = 0; j < n; j++) {
+                y = x[cs[j]];
+                if (y) {
+                    r.push(y);
+                } else {
+                    r.push("?"); // use ? to fill empty slots
+                }
+            } // r is ready
+            rs.push(r);
+        } // rs is ready
+        data = {cols: cs, rows: rs};
+
+        table = document.createElement("table");
+        //table.style.border = "1px solid grey";
+        table.style.borderCollapse = "collapse";
+        table.appendChild(cons_colgroup(data));
+        table.appendChild(cons_thead(data));
+        table.appendChild(cons_tbody(data));
+        var theads = table.getElementsByTagName("thead")[0].getElementsByTagName("tr")[0].children;
+        batchAddEventListener(theads, "click", function() {
+            var col = document.getElementById("c" + this.id.slice(1)),
+                color_off = "white",
+                color_on = "#B3D4FC",
+                flag = "is-selected", on = "1", off = "0";
+            console.log(col.getAttribute(flag));
+            switch (col.getAttribute(flag)) {
+                case off:
+                    col.setAttribute(flag, on);
+                    col.style.backgroundColor = color_on;
+                    break;
+                case on:
+                    col.setAttribute(flag, off);
+                    col.style.backgroundColor = color_off;
+                    break;
+                default:
+                    col.setAttribute(flag, on);
+                    col.style.backgroundColor = color_on;
             }
-        }
-    );
-}
+        });
+        document.body.appendChild(table);
 
-// evaluate over an array
-function reduce(fn, init, arr) {
-    var env = init;
-    var i;
-    for (i = 0; i < arr.length; i++) {
-        env = fn(env, arr[i]);
-    }
-    return env;
-}
-
-// table-to-table query
-function do_query(q, table) {
-    var do_row = function (env, x) {
-        var v = q(x);
-        if (v)
-            env.push(v);
-        return env;
-    };
-    return reduce(do_row, [], table);
-}
-
-// provide SELECT and WHERE
-function query(cols, pred) {
-    return function (row) {
-        var n = cols.length;
-        var ret, i;
-        if (pred(row) == true) {
-            ret = [];
-            for (i = 0; i < n; i++) {
-                ret.push(row[cols[i]]);
+        data.rows = data.rows.sort(function(a, b) {
+            var x = a[4], y = b[4];
+            if (x === y) return 0;
+            if (x === "?") {
+                //console.log("x === ?");
+                return 1;
             }
+            if (y === "?") {
+                //console.log("y === ?");
+                return -1;
+            }
+            return y - x;
+        });
+        console.log("#rows: " + data.rows.length);
+        tbody = document.createElement("tbody");
+        for (i = 0; i < m; i++) {
+            //console.log(data.rows[i]);
+            tbody.appendChild(data.rows[i].html);
         }
-        // else, ret is undefined
-        return ret;
-    };
-}
+        table.removeChild(table.childNodes[2]);
+        table.appendChild(tbody);
+    });
 
-var body = document.getElementsByTagName("body")[0];
+// TODO sorting by a chosen column
 
-function appendDOM(target, tag, text) {
-    target.appendChild(
-        document.createElement(tag).appendChild(
-            document.createTextNode(text)));
-}
-
-function do_visit_item(x) {
-    appendDOM(body, "div", JSON.stringify(x));
-}
-
-function do_history_item(x) {
-    var url = x.url;
-    chrome.history.getVisits(
-        {url: url}, iterator(do_visit_item));
-}
-
-var test_query_urls = query(
-    ["url", "visitCount"],
-    function (row) {
-        return row["visitCount"] > 2;
-    }
-);
-
-function filter(pred, vec) {
-    var r=[], n=vec.length, i, x;
-
-    for (i = 0; i < n; i++) {
-        x = vec[i]
-        if (pred(x)) r.push(x);
-    }
-    return r;
-}
-
-function map(f, vec) {
-    var r=[], n=vec.length, i;
-
-    for (i = 0; i < n; i++) {
-        r.push(f(vec[i]));
-    }
-    return r;
-}
-
-function url_isHttp(url_str) {
-    
-}
+// TODO add "click" listener to cells that contains URLs, "unfold" the result set of getVisits
