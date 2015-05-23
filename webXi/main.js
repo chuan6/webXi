@@ -70,6 +70,9 @@ chrome.history.search(
         for (i = 0; i < n; i++) {
             data.push(consURL(hv[i]));
         }
+        data.sort(function (a, b) {
+            return b.lastVisitTime - a.lastVisitTime;
+        });
 
         document.body.appendChild(function() {
             var table = document.createElement("table"),
