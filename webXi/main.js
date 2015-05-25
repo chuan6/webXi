@@ -1,7 +1,13 @@
 var NA = "?"; //denote data that is not available
 
+var Env = {
+    stack: [],
+    selectedCols: []
+}; //the global environment built up 
+
 function getData(obj, property) {
     var x = obj[property];
+
     return x? x : NA;
 }
 
@@ -35,118 +41,138 @@ function getHost(url) {
             len++; //count a char of the host
         }
     }
-
     return (step === 3 && len > 0)? url.slice(i-len, i) : false;
 }
 
-function consURL(hx) {
-    if (!hx.url)
-        return false;
-    //hx has property "url"
+function getCmpFn(f, reverseflag) {
+    var x = reverseflag? -1 : 1;
+    
+    return function(a, b) {
+        var va = f(a), vb = f(b);
+        var r;
 
-    //convert values of missing properties to NAs
-    hx.lastVisitTime = getData(hx, "lastVisitTime");
-    hx.visitCount = getData(hx, "visitCount");
-    hx.typedCount = getData(hx, "typedCount");
+        if (va === vb) return 0;
 
-    //attach corresponding html element: tr
-    hx.htmlElem = function() {
-        var td, tr = document.createElement("tr");
-        
-        td = document.createElement("td");
-        td.textContent = hx.url;
-        tr.appendChild(td);
-
-        td = document.createElement("td");
-        td.textContent = String(hx.lastVisitTime);
-        tr.appendChild(td);
-        
-        td = document.createElement("td");
-        td.textContent = String(hx.visitCount);
-        td.style.textAlign = "right";
-        tr.appendChild(td);
-
-        td = document.createElement("td");
-        td.textContent = String(hx.typedCount);
-        td.style.textAlign = "right";
-        tr.appendChild(td);
-
-        return tr;
-    }();
-
-    return hx;
+        if (va === NA) {//vb !== NA
+            r = -1;
+        } else if (vb === NA) {
+            r = 1;
+        } else {//neither va nor vb equals NA
+            r = va < vb? -1 : 1;
+        }
+        return x * r;
+    };
 }
 
-function batchAddEventListener(elems, event, handler) {
-    var n = elems.length, i;
-    for (i = 0; i < n; i++) {
-	elems[i].addEventListener(event, handler);
+function selectCol(nth) {
+    var col = document.getElementById("c" + nth);
+    var color_on = "#B3D4FC", color_off = "white";
+
+    switch (!!Env.selectedCols[nth]) {
+    case false:
+        col.style.backgroundColor = color_on;
+        Env.selectedCols[nth] = true;
+        break;
+    case true:
+        col.style.backgroundColor = color_off;
+        Env.selectedCols[nth] = false;
+        break;
     }
 }
 
-function groupByHost(data) {
-    var i, n = data.length;
-    var x, host;
-    var item, container = {}, vec = [];
-    for (i = 0; i < n; i++) {
-        x = data[i];
-        host = getHost(x.url);
-        if (!host)
-            continue;
+function tableCellOnClick() {
+    var tag = this.tagName.toLowerCase();
+    
+    if (tag === "th") { //column selected
+        selectCol(Number(this.id.slice(1)));
+    }
+}
 
-        item = getData(container, host);
-        if (item === NA) {
-            container[host] = {
-                host: host,
-                lastVisitTime: x.lastVisitTime,
-                visitCount: x.visitCount,
-                typedCount: x.typedCount
-            };
+function consTR(idxv, row) {
+    var i, n = idxv.length;
+    var tr = document.createElement("tr"),
+        td;
+    var x;
+    
+    for (i = 0; i < n; i++) {
+        console.assert(idxv[i] < row.length,
+                       "idxv[i] < row.length");
+        x = row[idxv[i]];
+        
+        td = document.createElement("td");
+        if (x === NA) {
+            td.style.textAlign = "center";
+            td.textContent = "?";
+        } else if (x + 0 === x) {
+            td.style.textAlign = "right";
+            td.textContent = String(x);
         } else {
-            if (x.lastVisitTime > item.lastVisitTime)
-                item.lastVisitTime = x.lastVisitTime;
-            if (item.visitCount === NA && x.visitCount !== NA)
-                item.visitCount = x.visitCount;
-            if (item.visitCount !== NA && x.visitCount !== NA)
-                item.visitCount += x.visitCount;
-            if (item.typedCount === NA && x.typedCount !== NA)
-                item.typedCount = x.typedCount;
-            if (item.typedCount !== NA && x.typedCount !== NA)
-                item.typedCount += x.typedCount;
+            td.textContent = String(x);
+        }
+        td.addEventListener("click", tableCellOnClick);
+        tr.appendChild(td);
+    }
+    return tr;
+}
+
+function consTABLE(headv, idxv, rowv) {
+    console.assert(headv.length===idxv.length,
+                   "headv and idxv have different lengthes");
+    var i, m = headv.length;
+    var j, n = rowv.length;
+    var table = document.createElement("table"),
+        colgroup = document.createElement("colgroup"),
+        thead = document.createElement("thead"),
+        tbody = document.createElement("tbody"),
+        col, tr, th, td;
+
+    // col's and th's
+    tr = document.createElement("tr"); //row in thead
+    for (i = 0; i < m; i++) {
+        col = document.createElement("col");
+        col.id = "c" + i;
+        colgroup.appendChild(col);
+        
+        th = document.createElement("th");
+        th.id = "h" + i;
+        th.textContent = headv[i];
+        th.addEventListener("click", tableCellOnClick);
+        tr.appendChild(th);
+    }
+    table.appendChild(colgroup);
+    thead.appendChild(tr);
+    table.appendChild(thead);
+
+    // tr's
+    for (j = 0; j < n; j++) {
+        tbody.appendChild(consTR(idxv, rowv[j]));
+    }
+    table.appendChild(tbody);
+    table.style.borderCollapse = "collapse";
+    return table;
+}
+
+function consDataFromSrc(src) {
+    var data = [];
+    var i, n = src.length;
+    var h, x, url;
+
+    for (i = 0; i < n; i++) {
+        h = src[i];
+        url = getData(h, "url");
+        if (url && url.slice(0, 4) === "http") {
+            data.push([
+                getData(h, "id"),
+                url,
+                getData(h, "lastVisitTime"),
+                getData(h, "visitCount"),
+                getData(h, "typedCount")
+            ]);
+        } else {
+            continue;
         }
     }
-
-    for (host in container) {
-        item = container[host];
-        item.htmlElem = function() {
-            var td, tr = document.createElement("tr");
-            
-            td = document.createElement("td");
-            td.textContent = item.host;
-            tr.appendChild(td);
-
-            td = document.createElement("td");
-            td.textContent = String(item.lastVisitTime);
-            tr.appendChild(td);
-            
-            td = document.createElement("td");
-            td.textContent = String(item.visitCount);
-            td.style.textAlign = "right";
-            tr.appendChild(td);
-
-            td = document.createElement("td");
-            td.textContent = String(item.typedCount);
-            td.style.textAlign = "right";
-            tr.appendChild(td);
-
-            return tr;
-        }();
-        vec.push(item);
-    }
-    vec.sort(function (a, b) {
-        return b.lastVisitTime - a.lastVisitTime;
-    });
-    return vec;
+    return data;
 }
 
 var millisecondsPerDay = 1000 * 60 * 60 * 24;
@@ -157,135 +183,23 @@ var oneMonthAgo = now - millisecondsPerDay * 28;
 
 chrome.history.search(
     {
-	text: "",
-	startTime: oneDayAgo,
-	endTime: now,
-	maxResults: 1000000
-    },
-    function (hv) {
-        var data = [];
-        var n = hv.length;
-        var i;
+        text: "",
+        startTime: oneDayAgo,
+        endTime: now,
+        maxResults: 1000000
+    }, function(hv) {
+        var curr = {};
 
-        for (i = 0; i < n; i++) {
-            data.push(consURL(hv[i]));
-        }
-        data.sort(function (a, b) {
-            return b.lastVisitTime - a.lastVisitTime;
-        });
+        curr.data = consDataFromSrc(hv);
+        curr.headv = ["url", "last visit time", "visit count", "typed count"];
+        curr.table = consTABLE(curr.headv, [1, 2, 3, 4], curr.data);
+        Env.stack.push(curr);
 
-        document.body.appendChild(function() {
-            var table = document.createElement("table"),
-                colgroup = document.createElement("colgroup"),
-                thead = document.createElement("thead"),
-                tbody = document.createElement("tbody");
-            var col, tr, th, td;
-            var cs = ["url", "lastVisitTime", "visitCount", "typedCount"],
-                m = cs.length;
-            var j; //index for rows
-
-            tr = document.createElement("tr");
-            for (i = 0; i < m; i++) {
-                col = document.createElement("col");
-                col.id = "c" + i;
-                colgroup.appendChild(col);
-
-                th = document.createElement("th");
-                th.id = "h" + i;
-                th.textContent = cs[i];
-                tr.appendChild(th);
-            }
-            thead.appendChild(tr);
-            table.appendChild(colgroup);
-            table.appendChild(thead);
-
-            for (j = 0; j < n; j++) {
-                tbody.appendChild(data[j].htmlElem);
-            }
-            table.appendChild(tbody);
-
-            batchAddEventListener(table.getElementsByTagName("th"), "click", function() {
-                var col = document.getElementById("c" + this.id.slice(1));
-                var flag = "is-selected", on = "1", off = "0",
-                    color_on = "#B3D4FC", color_off = "white";
-                switch (col.getAttribute(flag)) {
-                case off:
-                    col.setAttribute(flag, on);
-                    col.style.backgroundColor = color_on;
-                    break;
-                case on:
-                    col.setAttribute(flag, off);
-                    col.style.backgroundColor = color_off;
-                    break;
-                default:
-                    col.setAttribute(flag, on);
-                    col.style.backgroundColor = color_on;
-                }
-            });
-
-            table.style.borderCollapse = "collapse";
-
-            return table;
-        }());
-
-        // group by hosts
-        data = groupByHost(data);
-        n = data.length;
-        document.body.replaceChild(function() {
-            var table = document.createElement("table"),
-                colgroup = document.createElement("colgroup"),
-                thead = document.createElement("thead"),
-                tbody = document.createElement("tbody");
-            var col, tr, th, td;
-            var cs = ["host", "lastVisitTime", "visitCount", "typedCount"],
-                m = cs.length;
-            var j; //index for rows
-
-            tr = document.createElement("tr");
-            for (i = 0; i < m; i++) {
-                col = document.createElement("col");
-                col.id = "c" + i;
-                colgroup.appendChild(col);
-
-                th = document.createElement("th");
-                th.id = "h" + i;
-                th.textContent = cs[i];
-                tr.appendChild(th);
-            }
-            thead.appendChild(tr);
-            table.appendChild(colgroup);
-            table.appendChild(thead);
-
-            for (j = 0; j < n; j++) {
-                tbody.appendChild(data[j].htmlElem);
-            }
-            table.appendChild(tbody);
-
-            batchAddEventListener(table.getElementsByTagName("th"), "click", function() {
-                var col = document.getElementById("c" + this.id.slice(1));
-                var flag = "is-selected", on = "1", off = "0",
-                    color_on = "#B3D4FC", color_off = "white";
-                switch (col.getAttribute(flag)) {
-                case off:
-                    col.setAttribute(flag, on);
-                    col.style.backgroundColor = color_on;
-                    break;
-                case on:
-                    col.setAttribute(flag, off);
-                    col.style.backgroundColor = color_off;
-                    break;
-                default:
-                    col.setAttribute(flag, on);
-                    col.style.backgroundColor = color_on;
-                }
-            });
-
-            table.style.borderCollapse = "collapse";
-
-            return table;
-        }(), document.body.lastElementChild);
+        //show the table
+        document.body.appendChild(curr.table);
     }
 );
+
 
 // TODO sorting by a chosen column
 
