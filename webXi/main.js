@@ -5,6 +5,29 @@ var Env = {
     selectedCols: []
 }; //the global environment built up 
 
+function peek(v) {
+    var n = v.length;
+
+    return n === 0? false : v[n-1];
+}
+
+function makeDataCopy() {    
+    var curr = [], prev = peek(Env.stack).data;
+    var i, n = prev.length;
+
+    if (n === 0)
+        return curr;
+
+    //assumptions:
+    //1. data is a two-dimension array;
+    //2. each atomic element in data is either a string or a
+    //   number (thus slice() can be used to copy each row);
+    for (i = 0; i < n; i++) {
+        curr.push(prev[i].slice());
+    }
+    return curr;
+}
+
 function getData(obj, property) {
     var x = obj[property];
 
@@ -64,40 +87,67 @@ function getCmpFn(f, reverseflag) {
     };
 }
 
+function consBUTTON(id, label, actionfn) {
+    var button = document.createElement("button");
+
+    button.id = id;
+    button.textContent = label;
+    button.addEventListener("click", actionfn);
+    return button;
+}
+
+function consCtrlPanel(ctrlv) {
+    var ctrlpanel = document.createElement("p");
+    var i, n = ctrlv.length;
+
+    for (i = 0; i < n; i++) {
+        ctrlpanel.appendChild(ctrlv[i]);
+    }
+    return ctrlpanel;
+}
+
+//flip the state of a column, also with change in style
 function selectCol(nth) {
     var col = document.getElementById("c" + nth);
     var color_on = "#B3D4FC", color_off = "white";
+    var ctrlpanel;
 
-    switch (!!Env.selectedCols[nth]) {
-    case false:
-        col.style.backgroundColor = color_on;
-        Env.selectedCols[nth] = true;
-        break;
-    case true:
+    if (Env.selectedCols[nth] === true) {
         col.style.backgroundColor = color_off;
         Env.selectedCols[nth] = false;
-        break;
+    } else {
+        col.style.backgroundColor = color_on;
+        Env.selectedCols[nth] = true;
     }
+
+    //TODO add operation handles to the selected columns
+}
+
+function getEnclosingTableCell(node) {
+    var elem = node.parentNode;
+    var tag = elem.tagName.toLowerCase();
+    
+    if (tag === "th" || tag === "td")
+        return elem;
+    return false;
 }
 
 function tableCellOnClick() {
-    var tag = this.tagName.toLowerCase();
+    var cell = getEnclosingTableCell(this);
+    var tag = cell.tagName.toLowerCase(); // "th" or "td"
     
     if (tag === "th") { //column selected
-        selectCol(Number(this.id.slice(1)));
+        selectCol(Number(cell.id.slice(1)));
     }
 }
 
-function consTR(idxv, row) {
-    var i, n = idxv.length;
-    var tr = document.createElement("tr"),
-        td;
+function consTR(row) {
+    var i, n = row.length;
+    var td, tr = document.createElement("tr");
     var x;
     
     for (i = 0; i < n; i++) {
-        console.assert(idxv[i] < row.length,
-                       "idxv[i] < row.length");
-        x = row[idxv[i]];
+        x = row[i];
         
         td = document.createElement("td");
         if (x === NA) {
@@ -115,16 +165,42 @@ function consTR(idxv, row) {
     return tr;
 }
 
-function consTABLE(headv, idxv, rowv) {
-    console.assert(headv.length===idxv.length,
-                   "headv and idxv have different lengthes");
+function isNumericCol(nth, rowv) {
+    var i, n = rowv.length;
+    var x;
+
+    for (i = 0; i < n; i++) {
+        x = rowv[i][nth];
+        if (x === NA)
+            continue;
+        return (x + 0 === x);
+    }
+    //if for all rows in rowv, value at nth column is NA, return
+    //false; it is meaningless to sort by this column anyway
+    return false;
+}
+
+var sortIconClickHandler = (function() {
+    var state = false;
+
+    return function() {
+        console.log(state);
+        var nth = Number(getEnclosingTableCell(this).id.slice(1));
+        
+        updateEnv_sort(nth, state);
+        state = !state;
+        mountNewTABLE(peek(Env.stack).table);
+    };
+})();
+
+function consTABLE(headv, rowv) {
     var i, m = headv.length;
     var j, n = rowv.length;
     var table = document.createElement("table"),
         colgroup = document.createElement("colgroup"),
         thead = document.createElement("thead"),
         tbody = document.createElement("tbody"),
-        col, tr, th, td;
+        col, tr, th, td, span, sort_icon;
 
     // col's and th's
     tr = document.createElement("tr"); //row in thead
@@ -135,8 +211,27 @@ function consTABLE(headv, idxv, rowv) {
         
         th = document.createElement("th");
         th.id = "h" + i;
-        th.textContent = headv[i];
-        th.addEventListener("click", tableCellOnClick);
+        span = document.createElement("span");
+        span.textContent = headv[i];
+        span.style.padding = "0px 4px";
+        span.addEventListener("click", tableCellOnClick);
+        th.appendChild(span);
+        if (isNumericCol(i, rowv)) {
+            //add separator first
+            span = document.createElement("span");
+            span.textContent = "|";
+            span.style.color = "gray";
+            th.appendChild(span);
+
+            //then add the sorting icon
+            sort_icon = document.createElement("span");
+            sort_icon.textContent = "↕";
+            sort_icon.style.color = "Blue";
+            sort_icon.style.fontWeight = "bold";
+            sort_icon.style.padding = "0px 4px";
+            sort_icon.addEventListener("click", sortIconClickHandler);
+            th.appendChild(sort_icon);
+        }
         tr.appendChild(th);
     }
     table.appendChild(colgroup);
@@ -145,14 +240,20 @@ function consTABLE(headv, idxv, rowv) {
 
     // tr's
     for (j = 0; j < n; j++) {
-        tbody.appendChild(consTR(idxv, rowv[j]));
+        tbody.appendChild(consTR(rowv[j]));
     }
     table.appendChild(tbody);
     table.style.borderCollapse = "collapse";
     return table;
 }
 
-function consDataFromSrc(src) {
+function mountNewTABLE(table) {
+    console.log("mount new table");
+    document.body.replaceChild(table, document.body.lastElementChild);
+}
+
+//initialize data from the result of chrome.history.search
+function initData(src) {
     var data = [];
     var i, n = src.length;
     var h, x, url;
@@ -162,7 +263,6 @@ function consDataFromSrc(src) {
         url = getData(h, "url");
         if (url && url.slice(0, 4) === "http") {
             data.push([
-                getData(h, "id"),
                 url,
                 getData(h, "lastVisitTime"),
                 getData(h, "visitCount"),
@@ -173,6 +273,23 @@ function consDataFromSrc(src) {
         }
     }
     return data;
+}
+
+//sort data by the nth column
+function updateEnv_sort(nth, reverseflag) {
+    var cmpfn = getCmpFn(
+        function(row) { return row[nth]; },
+        reverseflag
+    );
+    var curr = {}, prev = peek(Env.stack);
+
+    console.assert(prev, "cannot update on empty Env");
+
+    curr.data = makeDataCopy().sort(cmpfn);
+    curr.headv = prev.headv;
+    curr.table = consTABLE(curr.headv, curr.data);
+    Env.stack.push(curr);
+    Env.selectedCols = [];
 }
 
 var millisecondsPerDay = 1000 * 60 * 60 * 24;
@@ -190,9 +307,9 @@ chrome.history.search(
     }, function(hv) {
         var curr = {};
 
-        curr.data = consDataFromSrc(hv);
+        curr.data = initData(hv);
         curr.headv = ["url", "last visit time", "visit count", "typed count"];
-        curr.table = consTABLE(curr.headv, [1, 2, 3, 4], curr.data);
+        curr.table = consTABLE(curr.headv, curr.data);
         Env.stack.push(curr);
 
         //show the table
