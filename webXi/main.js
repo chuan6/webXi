@@ -1,37 +1,31 @@
 var NA = "?"; //denote data that is not available
 
-var Env = {
+var Env = { //the global environment built up
     stack: [],
     selectedCols: []
-}; //the global environment built up 
+};
 
-function peek(v) {
+function peek(v) { //peek array as a stack
     var n = v.length;
 
     return n === 0? false : v[n-1];
 }
 
-function makeDataCopy() {    
-    var curr = [], prev = peek(Env.stack).data;
-    var i, n = prev.length;
-
-    if (n === 0)
-        return curr;
-
+function getCopy(data) { //make a "deep" copy of data
     //assumptions:
     //1. data is a two-dimension array;
     //2. each atomic element in data is either a string or a
     //   number (thus slice() can be used to copy each row);
-    for (i = 0; i < n; i++) {
-        curr.push(prev[i].slice());
+
+    var i, n = data.length;
+    var copy = [];
+
+    if (n === 0)
+        return copy;
+    for (i = 0; i < n; i++) { //copy by rows
+        copy.push(data[i].slice());
     }
-    return curr;
-}
-
-function getData(obj, property) {
-    var x = obj[property];
-
-    return x? x : NA;
+    return copy;
 }
 
 function getHost(url) {
@@ -123,20 +117,22 @@ function selectCol(nth) {
     //TODO add operation handles to the selected columns
 }
 
-function getEnclosingTableCell(node) {
-    var elem = node.parentNode;
-    var tag = elem.tagName.toLowerCase();
-    
-    if (tag === "th" || tag === "td")
-        return elem;
-    return false;
+function getEnclosingTableCell(node) { //get enclosing table cell recursively
+    var name;
+
+    if (node === null)
+        return false;
+    name = node.nodeName;
+    if (name === "TH" || name === "TD")
+        return node;
+    return getEnclosingTableCell(node.parentNode);
 }
 
 function tableCellOnClick() {
     var cell = getEnclosingTableCell(this);
-    var tag = cell.tagName.toLowerCase(); // "th" or "td"
+    var tag = cell.tagName; // "TH" or "TD"
     
-    if (tag === "th") { //column selected
+    if (tag === "TH") { //column selected
         selectCol(Number(cell.id.slice(1)));
     }
 }
@@ -180,18 +176,12 @@ function isNumericCol(nth, rowv) {
     return false;
 }
 
-var sortIconClickHandler = (function() {
-    var state = false;
-
-    return function() {
-        console.log(state);
-        var nth = Number(getEnclosingTableCell(this).id.slice(1));
-        
-        updateEnv_sort(nth, state);
-        state = !state;
-        mountNewTABLE(peek(Env.stack).table);
-    };
-})();
+function sortIconOnClick() {
+    var nth = Number(getEnclosingTableCell(this).id.slice(1));
+    
+    updateEnv_sort(nth);
+    mountNewTABLE(peek(Env.stack).table);
+}
 
 function consTABLE(headv, rowv) {
     var i, m = headv.length;
@@ -229,7 +219,7 @@ function consTABLE(headv, rowv) {
             sort_icon.style.color = "Blue";
             sort_icon.style.fontWeight = "bold";
             sort_icon.style.padding = "0px 4px";
-            sort_icon.addEventListener("click", sortIconClickHandler);
+            sort_icon.addEventListener("click", sortIconOnClick);
             th.appendChild(sort_icon);
         }
         tr.appendChild(th);
@@ -248,7 +238,6 @@ function consTABLE(headv, rowv) {
 }
 
 function mountNewTABLE(table) {
-    console.log("mount new table");
     document.body.replaceChild(table, document.body.lastElementChild);
 }
 
@@ -256,17 +245,23 @@ function mountNewTABLE(table) {
 function initData(src) {
     var data = [];
     var i, n = src.length;
-    var h, x, url;
+    var hitem,
+        get = function(property) { //get property value of a HistoryItem
+            var v = hitem[property];
+            return  v? v : NA;
+        };
+    var url;
 
     for (i = 0; i < n; i++) {
-        h = src[i];
-        url = getData(h, "url");
+        hitem = src[i];
+
+        url = get("url");
         if (url && url.slice(0, 4) === "http") {
-            data.push([
+            data.push([ //add one row
                 url,
-                getData(h, "lastVisitTime"),
-                getData(h, "visitCount"),
-                getData(h, "typedCount")
+                get("lastVisitTime"),
+                get("visitCount"),
+                get("typedCount")
             ]);
         } else {
             continue;
@@ -276,18 +271,23 @@ function initData(src) {
 }
 
 //sort data by the nth column
-function updateEnv_sort(nth, reverseflag) {
-    var cmpfn = getCmpFn(
-        function(row) { return row[nth]; },
-        reverseflag
-    );
+function updateEnv_sort(nth) {
+    var flag, cmpfn;
     var curr = {}, prev = peek(Env.stack);
+
+    if (prev.sorted && prev.sorted.nth===nth) {
+        flag = !prev.sorted.reverse;
+    } else {
+        flag = true;
+    }
+    cmpfn = getCmpFn(function(row) { return row[nth]; }, flag);
 
     console.assert(prev, "cannot update on empty Env");
 
-    curr.data = makeDataCopy().sort(cmpfn);
+    curr.data = getCopy(prev.data).sort(cmpfn);
     curr.headv = prev.headv;
     curr.table = consTABLE(curr.headv, curr.data);
+    curr.sorted = {nth: nth, reverse: flag};
     Env.stack.push(curr);
     Env.selectedCols = [];
 }
@@ -310,6 +310,7 @@ chrome.history.search(
         curr.data = initData(hv);
         curr.headv = ["url", "last visit time", "visit count", "typed count"];
         curr.table = consTABLE(curr.headv, curr.data);
+        curr.sorted = null;
         Env.stack.push(curr);
 
         //show the table
