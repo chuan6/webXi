@@ -248,7 +248,7 @@ function mountNewTABLE(table) {
     document.body.replaceChild(table, document.body.lastElementChild);
 }
 
-function countVisits(since) {
+function getVisitsCounter(since) {
     return function(vv) {
         var c = 0;
         var i, n = vv.length;
@@ -265,36 +265,6 @@ function countVisits(since) {
         }
         return c;
     };
-}
-
-function initData(src, count) {
-    var data = [];
-    var i, n = src.length;
-    var hitem,
-        get = function(property) { //get property value of a HistoryItem
-            var v = hitem[property];
-            return  v? v : NA;
-        };
-    var url, nvisits;
-
-    (function iter(i) {
-        if (i === n)
-            return;
-        
-        hitem = src[i];
-        url = get("url");
-        if (url && url.slice(0, 4) === "http") {
-            chrome.history.getVisits({url: url}, function(vv) {
-                nvisits = count(vv);
-                data.push([url, get("lastVisitTime"), nvisits]);
-                iter(++i);
-            });
-        } else {
-            iter(++i);
-        }
-    })(0);
-
-    return data;
 }
 
 //sort data by the nth column
@@ -325,38 +295,24 @@ var oneDayAgo = now - millisecondsPerDay;
 var oneWeekAgo = now - millisecondsPerDay * 7;
 var oneMonthAgo = now - millisecondsPerDay * 28;
 
-function after(data) {
-    var curr = {};
+function htail(arr, begin, isShallow) {
+    var v, n, i;
 
-    curr.data = data;
-    curr.headv = ["url", "last visit time", "visit count"];
-    curr.table = consTABLE(curr.headv, curr.data);
-    curr.sorted = null;
-    Env.stack.push(curr);
-
-    //show the table
-    document.body.appendChild(curr.table);
-}
-
-function before(v, i, data, countfn) {
-    var x, url;
-    
-    if (v.length !== 0) {
-        x = v[0];
-        url = getProperty(x, "url");
-
-        if (url !== NA && url.slice(0, 4) === "http") {
-            chrome.history.getVisits({url: url}, function(vv) {
-                data[i] = [url, getProperty(x, "lastVisitTime"), countfn(vv)];
-                if (v.length === 1) { //finished
-                    after(data);
-                }
-            });
-            before(v.slice(1), i+1, data, countfn);
-        } else {
-            before(v.slice(1), i, data, countfn);
-        }
+    if (isShallow === true) {
+        v = arr;
+    } else {
+        v = arr.slice(0);
     }
+    n = v.length;
+    i = begin;
+
+    console.assert(i >= 0 && i <= n, "makeSlice inv breaks");
+
+    return {//i and n 
+        empty: i === n,
+        head: i === n? null : v[i],
+        tail: i === n? this : htail(v, i + 1, true)
+    };
 }
 
 chrome.history.search(
@@ -366,7 +322,47 @@ chrome.history.search(
         endTime: now,
         maxResults: 1000000
     }, function readsrc(hv) {
-        before(hv, 0, [], countVisits(oneDayAgo));
+        var execAfterDataIsReady = function() {
+            var curr = {};
+
+            curr.data = data;
+            curr.headv = ["url", "last visit time", "visit count"];
+            curr.table = consTABLE(curr.headv, curr.data);
+            curr.sorted = null;
+            Env.stack.push(curr);
+
+            //show the table
+            document.body.appendChild(curr.table);
+        };
+        var data = [];
+        var countVisits = getVisitsCounter(oneDayAgo);
+
+        (function recur(v, i) {
+            var x, xs, url, next;
+
+            if (v.empty)
+                return;
+
+            x = v.head;
+            xs = v.tail;
+            url = getProperty(x, "url");
+            
+            if (url === NA || url.slice(0, 4) !== "http") {
+                next = i;
+            } else {
+                chrome.history.getVisits({url: url}, function(vv) {
+                    data[i] = [
+                        url,
+                        getProperty(x, "lastVisitTime"),
+                        countVisits(vv)
+                    ];
+                    if (xs.empty) //finished
+                        execAfterDataIsReady();
+                });
+                next = i + 1;
+            }
+            recur(xs, next);
+        })(htail(hv, 0), 0);
     }
 );
 
