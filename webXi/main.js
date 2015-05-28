@@ -1,5 +1,10 @@
 var NA = "?"; //denote data that is not available
 
+function getProperty(obj, property) {
+    var v = obj[property];
+    return v? v : NA;
+}
+
 var Env = { //the global environment built up
     stack: [],
     selectedCols: []
@@ -192,6 +197,8 @@ function consTABLE(headv, rowv) {
         tbody = document.createElement("tbody"),
         col, tr, th, td, span, sort_icon;
 
+    console.log("m: " + m + "; n: " + n);
+    
     // col's and th's
     tr = document.createElement("tr"); //row in thead
     for (i = 0; i < m; i++) {
@@ -241,8 +248,26 @@ function mountNewTABLE(table) {
     document.body.replaceChild(table, document.body.lastElementChild);
 }
 
-//initialize data from the result of chrome.history.search
-function initData(src) {
+function countVisits(since) {
+    return function(vv) {
+        var c = 0;
+        var i, n = vv.length;
+        var x, time; //visit time
+
+        for (i = n-1; i > -1; i--) {
+            x = vv[i];
+            time = x.visitTime;
+            if (time && time >= since) {
+                c++;
+            } else {
+                return c;
+            }
+        }
+        return c;
+    };
+}
+
+function initData(src, count) {
     var data = [];
     var i, n = src.length;
     var hitem,
@@ -250,23 +275,25 @@ function initData(src) {
             var v = hitem[property];
             return  v? v : NA;
         };
-    var url;
+    var url, nvisits;
 
-    for (i = 0; i < n; i++) {
+    (function iter(i) {
+        if (i === n)
+            return;
+        
         hitem = src[i];
-
         url = get("url");
         if (url && url.slice(0, 4) === "http") {
-            data.push([ //add one row
-                url,
-                get("lastVisitTime"),
-                get("visitCount"),
-                get("typedCount")
-            ]);
+            chrome.history.getVisits({url: url}, function(vv) {
+                nvisits = count(vv);
+                data.push([url, get("lastVisitTime"), nvisits]);
+                iter(++i);
+            });
         } else {
-            continue;
+            iter(++i);
         }
-    }
+    })(0);
+
     return data;
 }
 
@@ -298,23 +325,48 @@ var oneDayAgo = now - millisecondsPerDay;
 var oneWeekAgo = now - millisecondsPerDay * 7;
 var oneMonthAgo = now - millisecondsPerDay * 28;
 
+function after(data) {
+    var curr = {};
+
+    curr.data = data;
+    curr.headv = ["url", "last visit time", "visit count"];
+    curr.table = consTABLE(curr.headv, curr.data);
+    curr.sorted = null;
+    Env.stack.push(curr);
+
+    //show the table
+    document.body.appendChild(curr.table);
+}
+
+function before(v, i, data, countfn) {
+    var x, url;
+    
+    if (v.length !== 0) {
+        x = v[0];
+        url = getProperty(x, "url");
+
+        if (url !== NA && url.slice(0, 4) === "http") {
+            chrome.history.getVisits({url: url}, function(vv) {
+                data[i] = [url, getProperty(x, "lastVisitTime"), countfn(vv)];
+                if (v.length === 1) { //finished
+                    after(data);
+                }
+            });
+            before(v.slice(1), i+1, data, countfn);
+        } else {
+            before(v.slice(1), i, data, countfn);
+        }
+    }
+}
+
 chrome.history.search(
     {
         text: "",
         startTime: oneDayAgo,
         endTime: now,
         maxResults: 1000000
-    }, function(hv) {
-        var curr = {};
-
-        curr.data = initData(hv);
-        curr.headv = ["url", "last visit time", "visit count", "typed count"];
-        curr.table = consTABLE(curr.headv, curr.data);
-        curr.sorted = null;
-        Env.stack.push(curr);
-
-        //show the table
-        document.body.appendChild(curr.table);
+    }, function readsrc(hv) {
+        before(hv, 0, [], countVisits(oneDayAgo));
     }
 );
 
