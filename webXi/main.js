@@ -7,7 +7,8 @@ function getProperty(obj, property) {
 
 var Env = { //the global environment built up
     stack: [],
-    selectedCols: []
+    selectedCols: [],
+    currentPage: -1
 };
 
 function peek(v) { //peek array as a stack
@@ -21,7 +22,6 @@ function getCopy(data) { //make a "deep" copy of data
     //1. data is a two-dimension array;
     //2. each atomic element in data is either a string or a
     //   number (thus slice() can be used to copy each row);
-
     var i, n = data.length;
     var copy = [];
 
@@ -185,7 +185,7 @@ function sortIconOnClick() {
     var nth = Number(getEnclosingTableCell(this).id.slice(1));
     
     updateEnv_sort(nth);
-    mountNewTABLE(peek(Env.stack).table);
+    pageNavi("top");
 }
 
 function consTABLE(headv, rowv) {
@@ -222,7 +222,7 @@ function consTABLE(headv, rowv) {
 
             //then add the sorting icon
             sort_icon = document.createElement("span");
-            sort_icon.textContent = "↕";
+            sort_icon.textContent = "⇵";
             sort_icon.style.color = "Blue";
             sort_icon.style.fontWeight = "bold";
             sort_icon.style.padding = "0px 4px";
@@ -244,8 +244,46 @@ function consTABLE(headv, rowv) {
     return table;
 }
 
-function mountNewTABLE(table) {
-    document.body.replaceChild(table, document.body.lastElementChild);
+function pageNavi(type) {
+    var back_button = document.getElementById("navi_back"),
+        next_button = document.getElementById("navi_next");
+    var n = Env.stack.length,
+        i = Env.currentPage;
+
+    console.assert(i < n && i >= 0, "pageNavi: inv is broken");
+    switch (type) {
+    case "top":
+        console.assert(n > 0, "pageNavi: empty Env.stack");
+        i = n - 1;
+        back_button.disabled = (i===0)? true : false;
+        next_button.disabled = true;
+        break;
+    case "back":
+        console.assert(i > 0, "pageNavi: no previous page");
+        --i;
+        back_button.disabled = (i===0)? true : false;
+        next_button.disabled = false;
+        break;
+    case "next":
+        console.assert(i < n-1, "pageNavi: no next page");
+        ++i;
+        back_button.disabled = false;
+        next_button.disabled = (i===n-1)? true : false;
+        break;
+    case "bottom":
+        console.assert(n > 0, "pageNavi: empty Env.stack");
+        i = 0;
+        back_button.disabled = true;
+        next_button.disabled = (i===n-1)? true : false;
+        break;
+    }
+    console.assert(i < n && i >= 0, "pageNavi: breaks inv");
+    back_button.disabled = (i === 0? true : false);
+    next_button.disabled = (i === n-1? true : false);
+    
+    Env.currentPage = i;
+    document.body.replaceChild(Env.stack[Env.currentPage].table,
+                               document.body.lastElementChild);
 }
 
 function getVisitsCounter(since) {
@@ -330,9 +368,14 @@ chrome.history.search(
             curr.table = consTABLE(curr.headv, curr.data);
             curr.sorted = null;
             Env.stack.push(curr);
+            Env.currentPage = 0;
 
             //show the table
             document.body.appendChild(curr.table);
+            document.getElementById("navi_back").onclick
+                = function() { pageNavi("back"); };
+            document.getElementById("navi_next").onclick
+                = function() { pageNavi("next"); };
         };
         var data = [];
         var countVisits = getVisitsCounter(oneDayAgo);
