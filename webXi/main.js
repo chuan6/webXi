@@ -17,6 +17,21 @@ function peek(v) { //peek array as a stack
     return n === 0? false : v[n-1];
 }
 
+function pushToEnv(update) {
+    var i = Env.currentPage,
+        n = Env.stack.length;
+
+    if (i === n-1) {//push upon the top
+        Env.stack.push(update);
+    } else { //push upon the current page
+        console.assert(i < n, "push: inv is broken");
+        Env.stack.splice(i+1, n-i, update);
+    }
+    Env.selectedCols = []; //forget previously selected columns
+    ++Env.currentPage;
+    pageNavi("top"); //update the view
+}
+
 function getCopy(data) { //make a "deep" copy of data
     //assumptions:
     //1. data is a two-dimension array;
@@ -185,7 +200,6 @@ function sortIconOnClick() {
     var nth = Number(getEnclosingTableCell(this).id.slice(1));
     
     updateEnv_sort(nth);
-    pageNavi("top");
 }
 
 function consTABLE(headv, rowv) {
@@ -244,47 +258,46 @@ function consTABLE(headv, rowv) {
     return table;
 }
 
-function pageNavi(type) {
+var pageNavi = (function() {
     var back_button = document.getElementById("navi_back"),
         next_button = document.getElementById("navi_next");
-    var n = Env.stack.length,
-        i = Env.currentPage;
 
-    console.assert(i < n && i >= 0, "pageNavi: inv is broken");
-    switch (type) {
-    case "top":
-        console.assert(n > 0, "pageNavi: empty Env.stack");
-        i = n - 1;
-        back_button.disabled = (i===0)? true : false;
-        next_button.disabled = true;
-        break;
-    case "back":
-        console.assert(i > 0, "pageNavi: no previous page");
-        --i;
-        back_button.disabled = (i===0)? true : false;
-        next_button.disabled = false;
-        break;
-    case "next":
-        console.assert(i < n-1, "pageNavi: no next page");
-        ++i;
-        back_button.disabled = false;
-        next_button.disabled = (i===n-1)? true : false;
-        break;
-    case "bottom":
-        console.assert(n > 0, "pageNavi: empty Env.stack");
-        i = 0;
-        back_button.disabled = true;
-        next_button.disabled = (i===n-1)? true : false;
-        break;
-    }
-    console.assert(i < n && i >= 0, "pageNavi: breaks inv");
-    back_button.disabled = (i === 0? true : false);
-    next_button.disabled = (i === n-1? true : false);
-    
-    Env.currentPage = i;
-    document.body.replaceChild(Env.stack[Env.currentPage].table,
-                               document.body.lastElementChild);
-}
+    return function(type) {
+        var n = Env.stack.length,
+            i = Env.currentPage;
+
+        console.assert(i < n && i >= 0, "pageNavi: inv is broken");
+        switch (type) {
+        case "top": console.assert(n > 0, "pageNavi: empty Env.stack");
+            i = n - 1;
+            back_button.disabled = (i===0)? true : false;
+            next_button.disabled = true;
+            break;
+        case "back": console.assert(i > 0, "pageNavi: no previous page");
+            --i;
+            back_button.disabled = (i===0)? true : false;
+            next_button.disabled = false;
+            break;
+        case "next": console.assert(i < n-1, "pageNavi: no next page");
+            ++i;
+            back_button.disabled = false;
+            next_button.disabled = (i===n-1)? true : false;
+            break;
+        case "bottom": console.assert(n > 0, "pageNavi: empty Env.stack");
+            i = 0;
+            back_button.disabled = true;
+            next_button.disabled = (i===n-1)? true : false;
+            break;
+        } console.assert(i < n && i >= 0, "pageNavi: breaks inv");
+
+        back_button.disabled = (i === 0? true : false);
+        next_button.disabled = (i === n-1? true : false);
+        
+        Env.currentPage = i;
+        document.body.replaceChild(Env.stack[Env.currentPage].table,
+                                   document.body.lastElementChild);
+    };
+})();
 
 function getVisitsCounter(since) {
     return function(vv) {
@@ -323,8 +336,9 @@ function updateEnv_sort(nth) {
     curr.headv = prev.headv;
     curr.table = consTABLE(curr.headv, curr.data);
     curr.sorted = {nth: nth, reverse: flag};
-    Env.stack.push(curr);
-    Env.selectedCols = [];
+
+    //curr is ready, update Env and the view
+    pushToEnv(curr);
 }
 
 var millisecondsPerDay = 1000 * 60 * 60 * 24;
