@@ -401,9 +401,9 @@ function consTABLE(headv, rowv) {
 }
 
 
-function getVisitsCounter(since) {
+function getVisitsFn(since) {
     return function (vv) {
-        var c = 0;
+        var r = [];
         var i, n = vv.length;
         var x, time; //visit time
 
@@ -411,12 +411,12 @@ function getVisitsCounter(since) {
             x = vv[i];
             time = x.visitTime;
             if (time && time >= since) {
-                c++;
+                r.push(x);
             } else {
-                return c;
+                return r;
             }
         }
-        return c;
+        return r;
     };
 }
 
@@ -452,9 +452,21 @@ chrome.history.search(
         startTime: oneWeekAgo,
         endTime: now,
         maxResults: 1000000
-    }, function(hv) {
+    }, function(hv) { //establish the original data
+        /*
+         * The original data is an epoch based table, which records all url
+         * requests by the time each request is made. The HistoryItems from
+         * url table lists all the requested urls from a period of time,
+         * instead of epochs for every requests made. So url table alone
+         * doesn't suffice. We retrieve from visit table in addition. A
+         * VisitItem from visit table tells an epoch for a url request. And
+         * a query to visit table using a url returns all VisitItems related
+         * to the url, and thus all the epochs for the url. By querying visit
+         * table for each url from url table, and we get all the data we need.
+         * Sort all the data by epoch. The original data is established.
+         */
         var execAfterDataIsReady = function () {
-            Env.pushData(data, ["url", "last visit time", "visit count"], null);
+            Env.pushData(data, ["visit time", "url"], {nth: 0, reverse: true});
             Env.pageNavi("top");
 
             DOC.getElementById("navi_back").onclick = function () {
@@ -465,9 +477,11 @@ chrome.history.search(
             };
         };
         var data = [];
-        var countVisits = getVisitsCounter(oneWeekAgo);
-        var readSrc = function recur(v, i) { //v:items to be read; i:# rows built
-            var x, xs, url, title, time, next;
+        var getVisits = getVisitsFn(oneWeekAgo);
+        var cmpfn = getCmpFn(function(row) { return row[0]; },
+                            true);
+        var readSrc = function iter_urls(v, i) { //v:items to be read; i:# rows built
+            var x, xs, url, next;
 
             if (v.empty)
                 return;
@@ -476,23 +490,31 @@ chrome.history.search(
             xs = v.tail;
 
             url = x.url;
-            if (!url || url.slice(0, 4)!=="http") {
+            if (!url || url.slice(0, 4)!=="http") { //skip unimportant urls
                 next = i;
             } else {
-                title = x.title;
-                time = x.lastVisitTime;
                 chrome.history.getVisits({url: url}, function(vv) {
-                    data[i] = [
-                        Type.url(url, title? title.trim() : ""),
-                        time? Type.epoch(time) : Type.NA,
-                        Type.count(countVisits(vv))
-                    ];
-                    if (xs.empty) //data is ready
+                    var vv = getVisits(vv);console.log(vv);
+                    var i, n = vv.length;
+                    var title = x.title;
+                    var url_obj = Type.url(url, title? title.trim() : "");
+                    var time;
+                    
+                    for (i = 0; i < n; i++) {
+                        time = vv[i].visitTime;
+                        
+                        data.push([time? Type.epoch(time) : Type.NA,
+                                   url_obj]);
+                    }
+                    if (xs.empty) {
+                        data.sort(cmpfn);
+                        //data is ready
                         execAfterDataIsReady();
+                    }
                 });
                 next = i + 1;
             }
-            recur(xs, next);
+            iter_urls(xs, next);
         };
 
         readSrc(htail(hv, 0), 0);
