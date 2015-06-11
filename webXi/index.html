@@ -8,21 +8,44 @@
        font-family: sans-serif;
      }
      a { color: blue; }
-     table {table-layout: fixed;}
+     table {
+       table-layout: fixed;
+       margin-top: 32px;
+     }
      td, th {
        border: 1px solid #cccccc;
        padding: 5px 4px 5px 8px;
-       max-width: 300px;
+       max-width: 256px;
        white-space: nowrap;
        overflow: hidden;
+     }
+     body, div {
+       margin: 0;
+       padding: 0;
+     }
+     #ctrl_panel {
+       position: fixed;
+       width: 97.5%;
+       top: 0;
+       left: 1%;
+       height: 28px;
+       padding-left: 3px;
+       background-color: aliceblue;
+       box-shadow: 0px 1px 2px #888888;
+     }
+     #ctrl_panel > button {
+       height: 22px;
+       font-weight: bold;
+       width: 64px;
+       margin: 3px 3px 3px 0px;
      }
     </style>
   </head>
   <body>
-    <p id="ctrl_panel">
+    <div id="ctrl_panel">
       <button id="navi_back" disabled>&lt; BACK</button>
       <button id="navi_next" disabled>NEXT &gt;</button>
-    </p>
-    <script src="main.js"></script>
+    </div>
+    <script charset="utf-8" src="main.js"></script>
   </body>
 </html>

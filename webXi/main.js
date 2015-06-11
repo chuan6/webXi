@@ -1,21 +1,26 @@
 var DOC = document;
 
 var Type = (function () {
-    var url_t = 1, epoch_t = 2, count_t = 3;
-    var url_aggr_t = 4; //aggregation on urls returns url_aggr_t type
-    var na_t = 5; // type for value "not available"
+    var str_t = 0, url_t = 1, epoch_t = 2, count_t = 3, duration_t = 4;
+    var url_aggr_t = 10; //aggregation on urls returns url_aggr_t type
+    var na_t = 11; // type for value "not available"
 
     var na = { type: na_t };
 
     return {
         NA: na,
+        str: function(x) { return {type: str_t, value: "" + x}; },
         url: function(x, title) { return { type: url_t, value: [x, title] }; },
         epoch: function(x) { return { type: epoch_t, value: new Date(x) }; },
-        count: function(x) { return { type: count_t, value: x }; },
+        count: function(x) { return { type: count_t, value: Number(x) }; },
+        duration: function(x) { return { type: duration_t, value: x }; },
         show: function(x) {
             var v = x.value;
+            var unit_str, tmp;
             
             switch (x.type) {
+            case str_t:
+                return v;
             case url_t:
                 return "<a href=\"" + v[0] + "\">"
                     + (v[1]? v[1] : v[0])
@@ -25,9 +30,31 @@ var Type = (function () {
                     .replace(/>/g, '&gt;')
                     + "</a>";
             case epoch_t:
-                return v.toISOString();
+                return v.toLocaleString();
             case count_t:
                 return String(v);
+            case duration_t:
+                tmp = v/1000; //ms -> s
+                if (tmp / 60 < 1) {
+                    unit_str = " s";
+                    v = tmp;
+                } else {
+                    tmp /= 60;
+                    if (tmp / 60 < 1) {
+                        unit_str = " m";
+                        v = tmp;
+                    } else {
+                        tmp /= 60;
+                        if (tmp / 24 < 1) {
+                            unit_str = " h";
+                            v = tmp;
+                        } else {
+                            unit_str = " d";
+                            v = tmp / 24;
+                        }
+                    }
+                }
+                return "" + v.toFixed(3) + unit_str;
             case na_t:
                 return "?";
             default:
@@ -43,11 +70,15 @@ var Type = (function () {
                 return false;
 
             switch (ta) {
+            case str_t:
+                return a.value === b.value;
             case url_t:
                 return a.value === b.value;
             case epoch_t:
                 return a.value.getTime() === b.value.getTime;
             case count_t:
+                return a.value === b.value;
+            case duration_t:
                 return a.value === b.value;
             default:
                 console.error("Error: Type.isEqual - invalid type.");
@@ -56,7 +87,7 @@ var Type = (function () {
         },
         isSortable: function(x) {
             var t = x.type;
-            return t===epoch_t || t===count_t;
+            return t===str_t || t===epoch_t || t===count_t || t===duration_t;
         },
         cmp: function(a, b) {
             var ta, tb;
@@ -66,9 +97,13 @@ var Type = (function () {
                 console.assert(ta===tb,
                                "Type.less: expect arguments of the same type.");
                 switch (ta) {
+                case str_t:
+                    return a.value < b.value? -1 : (a.value===b.value? 0 : 1);
                 case epoch_t:
                     return a.value.getTime() - b.value.getTime();
                 case count_t:
+                    return a.value - b.value;
+                case duration_t:
                     return a.value - b.value;
                 default:
                     return 0;
@@ -250,8 +285,10 @@ function getHost(url) {
 
 function getCmpFn(f, reverseflag) {
     var x = reverseflag ? -1 : 1;
+    var cmp = Type.cmp;
+    
     return function (a, b) {
-        return x * Type.cmp(f(a), f(b));
+        return x * cmp(f(a), f(b));
     };
 }
 
@@ -466,7 +503,7 @@ chrome.history.search(
          * Sort all the data by epoch. The original data is established.
          */
         var execAfterDataIsReady = function () {
-            Env.pushData(data, ["visit time", "url"], {nth: 0, reverse: true});
+            Env.pushData(data, ["visit time", "url", "visit", "transition", "from", "gap"], {nth: 0, reverse: true});
             Env.pageNavi("top");
 
             DOC.getElementById("navi_back").onclick = function () {
@@ -494,20 +531,31 @@ chrome.history.search(
                 next = i;
             } else {
                 chrome.history.getVisits({url: url}, function(vv) {
-                    var vv = getVisits(vv);console.log(vv);
+                    var vv = getVisits(vv);
                     var i, n = vv.length;
                     var title = x.title;
-                    var url_obj = Type.url(url, title? title.trim() : "");
+                    var url_obj = Type.url(url, //title? title.trim() :
+                                           "");
                     var time;
                     
                     for (i = 0; i < n; i++) {
                         time = vv[i].visitTime;
-                        
+                        //if (vv[i].transition=="link") {
                         data.push([time? Type.epoch(time) : Type.NA,
-                                   url_obj]);
+                                   url_obj,
+                                   Type.count(vv[i].visitId),
+                                   Type.str(vv[i].transition),
+                                   Type.count(vv[i].referringVisitId)
+                                  ]);
+                        //}
                     }
                     if (xs.empty) {
                         data.sort(cmpfn);
+                        n = data.length;
+                        data[0].push(Type.duration(0));
+                        for (i = 1; i < n; i++) {
+                            data[i].push(Type.duration(data[i-1][0].value.getTime() - data[i][0].value.getTime()));
+                        }
                         //data is ready
                         execAfterDataIsReady();
                     }
