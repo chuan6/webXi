@@ -1,4 +1,4 @@
-var DOC = document;
+var DOC = document; //singleton; updated, but never replaced
 
 var Type = (function () {
     var str_t = 0, url_t = 1, epoch_t = 2, count_t = 3, duration_t = 4;
@@ -9,12 +9,22 @@ var Type = (function () {
 
     return {
         NA: na,
-        str: function(x) { return {type: str_t, value: "" + x}; },
-        url: function(x, title) { return { type: url_t, value: [x, title] }; },
-        epoch: function(x) { return { type: epoch_t, value: new Date(x) }; },
-        count: function(x) { return { type: count_t, value: Number(x) }; },
-        duration: function(x) { return { type: duration_t, value: x }; },
-        show: function(x) {
+        str: function(x) {//bind value with type str_t
+            return {type: str_t, value: "" + x};
+        },
+        url: function(x, title) {//bind value with type url_t
+            return { type: url_t, value: [x, title] };
+        },
+        epoch: function(x) {//bind value with type epoch_t
+            return { type: epoch_t, value: new Date(x) };
+        },
+        count: function(x) {//bind value with type count_t
+            return { type: count_t, value: Number(x) };
+        },
+        duration: function(x) {//bind value with type duration_t
+            return { type: duration_t, value: x };
+        },
+        show: function(x) {//return a readable string
             var v = x.value;
             var unit_str, tmp;
             
@@ -62,7 +72,9 @@ var Type = (function () {
                 return "";
             }
         },
-        isNA: function(x) { return x === na; },
+        isNA: function(x) {
+            return x === na;
+        },
         isEqual: function(a, b) {
             var ta = a.type;
 
@@ -153,7 +165,6 @@ function peek(v) { //peek array as a stack
 var Env = (function () {
     var stack = [], len = 0;
     var curr_page = -1;
-    var col_sels = [];
 
     return {
         curr: function() {
@@ -178,7 +189,6 @@ var Env = (function () {
             }
             curr_page++;
             len = curr_page + 1;
-            col_sels = [];
         },
 
         pageNavi: (function () {
@@ -187,6 +197,10 @@ var Env = (function () {
 
             return function (type) {
                 var prev_table = DOC.getElementById("table");
+
+                //prepare
+                selection.clear(); selection.reset();
+                ctrlPanel.clear(); ctrlPanel.reset();
 
                 switch (type) {
                 case "top":
@@ -209,26 +223,6 @@ var Env = (function () {
                 } else {
                     DOC.body.appendChild(stack[curr_page].table);
                 }
-            };
-        })(),
-
-        flipColumnSelection: (function () {
-            var cid_prefix = "c"; //html id prefix for COL elements
-            var color_on = "#B3D4FC", color_off = "white";
-
-            return function (nth) {
-                var is_selected, col, top = peek(stack);
-
-                console.assert(
-                    nth >= 0 && top && top.data && nth < top.data.length,
-                    "Env.selectColumn: data[" + nth + "] is invalid.");
-
-                //nth is a valid column of current data
-                is_selected = col_sels[nth];
-                col = DOC.getElementById(cid_prefix + nth);
-
-                col.style.backgroundColor = is_selected ? color_off : color_on;
-                col_sels[nth] = is_selected ? false : true;
             };
         })()
     };
@@ -312,14 +306,141 @@ function getEnclosingTableCell(node) { //get enclosing table cell recursively
     return getEnclosingTableCell(node.parentNode);
 }
 
-function tableCellOnClick() {
-    var cell = getEnclosingTableCell(this);
-    var tag = cell.tagName; // "TH" or "TD"
-    
-    if (tag === "TH") { //column selected
-        Env.flipColumnSelection(Number(cell.id.slice(1)));
-    }
-}
+var selection = (function() {
+    var cv = [];
+    var color_on = "#B3D4FC", color_off = "white";
+
+    return {
+        clear: function() {
+            var i, n = cv.length, html;
+
+            for (i = 0; i < n; i++) {
+                if (cv[i]) {
+                    html = DOC.getElementById("c" + i);
+                    html.style.backgroundColor = color_off;
+                    cv[i] = false;
+                }
+            }
+        },
+        reset: function() {
+            cv = [];
+        },
+        flipCol: function(nthCol) {
+            var data = Env.curr().data;
+            var prev; //previous selection state of the nthCol column
+            var html; //the html elements to be operated upon
+
+            console.assert(nthCol>=0 && nthCol < data.length,
+                "selection.flipCol: no " + nthCol +"th column in data.");
+
+            prev = cv[nthCol];
+            html = DOC.getElementById("c" + nthCol);
+            html.style.backgroundColor = prev? color_off : color_on;
+
+            cv[nthCol] = prev? false : true; //flip state
+            return cv[nthCol];
+        }
+    };
+})();
+
+var ctrlPanel = (function() {
+    var panel;
+
+    var elemPos = function(elem) {//return global position as [x, y]
+        var x = 0, y = 0;
+
+        do {
+            x += elem.offsetLeft - elem.scrollLeft + elem.clientLeft;
+            y += elem.offsetTop - elem.scrollTop + elem.clientTop;
+            elem = elem.offsetParent;
+        } while (elem);
+        console.assert(!!elem === false, "elemPos: loop-inv broken.");
+        return [x, y];
+    };
+
+    return {
+        showAtHere: function(elem) {
+            var pos = elemPos(elem);
+
+            if (panel)
+                panel.parentNode.removeChild(panel);
+
+            panel = DOC.createElement("div");
+
+            panel.style.position = "absolute";
+            panel.style.left = pos[0];
+            panel.style.top = pos[1];
+            panel.style.backgroundColor = "aliceblue";
+
+            return function(buttonv) {//add buttons to the panel
+                var i, n = buttonv.length;
+                for (i = 0; i < n; i++) {
+                    panel.appendChild(buttonv[i]);
+                }
+                elem.appendChild(panel); //attach panel to target element
+            };
+        },
+        clear: function() {
+            if (panel)
+                panel.parentNode.removeChild(panel);
+        },
+        reset: function() {
+            panel = null;
+        }
+    };
+})();
+
+var tableCellOnClick = (function() {
+    return function() {
+        var cell = getEnclosingTableCell(this);
+        var tag = cell.tagName;
+
+        if (tag === "TH") {
+            var ix = Number(cell.id.slice(1)), iy;
+            var data = Env.curr().data, ny = data.length;
+            var button;
+
+            if (selection.flipCol(ix)) {
+                for (iy = 0; iy < ny; iy++) {
+                    if (Type.isNA(data[iy][ix]))
+                        continue;
+                    else
+                        break;
+                }
+                if (iy === ny || !Type.isSortable(data[iy][ix]))
+                    return;
+                console.log("create button");
+
+                button = DOC.createElement("button");
+                button.textContent = "sort by";
+                button.addEventListener("click", function() {
+                     var curr = Env.curr();
+                     var cmpfn, flag;
+
+                     if (curr.sorted && curr.sorted.nth === ix) {
+                         flag = !curr.sorted.reverse;
+                     } else {
+                         flag = true;
+                     }
+
+                     cmpfn = getCmpFn(function(row) {
+                         return row[ix];
+                     }, flag);
+
+                     Env.pushData(
+                         getCopy(curr.data).sort(cmpfn),
+                         curr.headv,
+                         { nth: ix, reverse: flag }
+                     );
+                     Env.pageNavi("top");
+                });
+                ctrlPanel.showAtHere(cell)([button]);
+            } else {
+                ctrlPanel.clear();
+            }
+        }
+    };
+})();
 
 function consTR(row) {
     var i, n = row.length;
@@ -340,44 +461,6 @@ function consTR(row) {
         tr.appendChild(td);
     }
     return tr;
-}
-
-function isNumericCol(nth, rowv) {
-    var i, n = rowv.length;
-    var x;
-
-    for (i = 0; i < n; i++) {
-        x = rowv[i][nth];
-        if (Type.isNA(x))
-            continue;
-        return Type.isSortable(x);
-    }
-    //if for all rows in rowv, value at nth column is NA, return
-    //false; it is meaningless to sort by this column anyway
-    return false;
-}
-
-function sortIconOnClick() {
-    var nth = Number(getEnclosingTableCell(this).id.slice(1));
-    var curr = Env.curr();
-    var cmpfn, flag;
-
-    if (curr.sorted && curr.sorted.nth === nth) {
-        flag = !curr.sorted.reverse;
-    } else {
-        flag = true;
-    }
-
-    cmpfn = getCmpFn(function(row) {
-        return row[nth];
-    }, flag);
-
-    Env.pushData(
-        getCopy(curr.data).sort(cmpfn),
-        curr.headv,
-        { nth: nth, reverse: flag }
-    );
-    Env.pageNavi("top");
 }
 
 function consTABLE(headv, rowv) {
@@ -405,22 +488,6 @@ function consTABLE(headv, rowv) {
         span.style.padding = "0px 4px";
         span.addEventListener("click", tableCellOnClick);
         th.appendChild(span);
-        if (isNumericCol(i, rowv)) {
-            //add separator first
-            span = DOC.createElement("span");
-            span.textContent = "|";
-            span.style.color = "gray";
-            th.appendChild(span);
-
-            //then add the sorting icon
-            sort_icon = DOC.createElement("span");
-            sort_icon.textContent = "⇵";
-            sort_icon.style.color = "Blue";
-            sort_icon.style.fontWeight = "bold";
-            sort_icon.style.padding = "0px 4px";
-            sort_icon.addEventListener("click", sortIconOnClick);
-            th.appendChild(sort_icon);
-        }
         tr.appendChild(th);
     }
     table.appendChild(colgroup);
