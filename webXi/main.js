@@ -12,9 +12,46 @@ var Type = (function () {
         str: function(x) {//bind value with type str_t
             return {type: str_t, value: "" + x};
         },
-        url: function(x, title) {//bind value with type url_t
-            return { type: url_t, value: [x, title] };
+        url: {
+            cons: function(x, title) {
+                return { type: url_t, value: [x, title] };
+            },
+            getHost: function(v) {
+                console.assert(v.type === url_t, "Type mismatch.");
+                var urlstr = v.value[0];
+                var i, n = urlstr.length;
+                var step = 0; //process is done through steps
+                var x, len;
+
+                ITER:
+                for (i = 0; i < n; i++) {
+                    x = urlstr[i];
+                    switch (step) {
+                    case 0: //move towards the first colon;
+                        if (x === ':') step++;
+                        break;
+                    case 1: //consume the following '/';
+                        if (x === '/') {
+                            step++; break;
+                        } else {
+                            break ITER;
+                        }
+                    case 2: //consume the following '/', and set begin
+                        if (x === '/') {
+                            len = 0; step++; break;
+                        } else {
+                            break ITER;
+                        }
+                    case 3: //move towards the next '/' or ':', or the end
+                        if (x === '/' || x === ':')
+                            break ITER;
+                        len++; //count a char of the host
+                    }
+                }
+                return (step===3 && len>0 ? urlstr.slice(i-len, i) : "");
+            }
         },
+        isUrl: function(x) { return x.type === url_t; },
         epoch: function(x) {//bind value with type epoch_t
             return { type: epoch_t, value: new Date(x) };
         },
@@ -32,12 +69,12 @@ var Type = (function () {
             case str_t:
                 return v;
             case url_t:
-                return "<a href=\"" + v[0] + "\">"
-                    + (v[1]? v[1] : v[0])
-                    .replace(/&/g, '&amp;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
+                return "<a href=\"" + v[0] + "\""
+                    + " title=\"" + v[1] + "\">"
+                    + v[0].replace(/&/g, '&amp;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
                     + "</a>";
             case epoch_t:
                 return v.toLocaleString();
@@ -131,22 +168,21 @@ var Type = (function () {
         aggregate: function(a, b) {
             var ta = a.type;
             
-            if (ta !== b.type) {
-                console.error("Error: Type.aggregate - arguments of different types.");
-                return undefined;
-            }
-
             switch (ta) {
             case url_t:
                 return { type: url_aggr_t, value: [a.value, b.value] };
             case url_aggr_t:
                 return { type: url_aggr_t, value: a.value.push(b.value) };
+            case str_t:
+                return { type: str_t, value: a.value + ", " + b.value };
             case epoch_t:
                 return {
                     type: epoch_t,
                     value: a.value.getTime() < b.value.getTime() ?
                         b.value : a.value
                 };
+            case duration_t:
+                return { type: duration_t, value: a.value + b.value };
             case count_t:
                 return { type: count_t, value: a.value + b.value };
             default:
@@ -242,39 +278,6 @@ function getCopy(data) { //make a "deep" copy of data
         copy.push(data[i].slice());
     }
     return copy;
-}
-
-function getHost(url) {
-    var n = url.length, i;
-    var step = 0; //process is done through steps
-    var x, len;
-
-    ITER:
-    for (i = 0; i < n; i++) {
-        x = url.charAt(i);
-        switch (step) {
-        case 0: //move towards the first colon;
-            if (x === ':') step++;
-            break;
-        case 1: //consume the following '/';
-            if (x === '/') {
-                step++; break;
-            } else {
-                break ITER;
-            }
-        case 2: //consume the following '/', and set begin
-            if (x === '/') {
-                len = 0; step++; break;
-            } else {
-                break ITER;
-            }
-        case 3: //move towards the next '/' or ':', or the end
-            if (x === '/' || x === ':')
-                break ITER;
-            len++; //count a char of the host
-        }
-    }
-    return (step === 3 && len > 0) ? url.slice(i - len, i) : false;
 }
 
 function getCmpFn(f, reverseflag) {
@@ -391,6 +394,91 @@ var ctrlPanel = (function() {
 })();
 
 var tableCellOnClick = (function() {
+    var sortByColumn = function(nth) {
+        return function() {
+            var curr = Env.curr();
+            var cmpfn, flag;
+
+            if (curr.sorted && curr.sorted.nth === nth) {
+                flag = !curr.sorted.reverse;
+            } else {
+                flag = true;
+            }
+
+            cmpfn = getCmpFn(function (row) {
+                return row[nth];
+            }, flag);
+
+            Env.pushData(
+                getCopy(curr.data).sort(cmpfn),
+                curr.headv,
+                {nth: nth, reverse: flag}
+            );
+            Env.pageNavi("top");
+        };
+    };
+
+    var groupByHosts = function(nth) {
+        var aggr = function(r, rx) {//DON'T change r or rx
+            var newr = [];
+            var i, n = r.length;
+
+            for (i = 0; i < n; i++) {
+                if (i === nth) {
+                    newr.push(r[i]);
+                } else {
+                    newr.push(Type.aggregate(r[i], rx[i]));
+                }
+            }
+            return newr;
+        };
+
+        return function() {
+            var rows = Env.curr().data;
+            var i, n = rows.length;
+            var tmp = {};
+            var row, host, sofar;
+            console.log("groupbyhost: n " + n);
+
+            for (i = 0; i < n; i++) {
+                row = rows[i];
+                host = Type.url.getHost(row[nth]);
+                sofar = tmp[host];
+                if (sofar === undefined) {
+                    row[nth] = Type.str(host);
+                    row.push(Type.count(1)); //add "group count" column
+                    console.log(row);
+                    tmp[host] = row; //set initial aggregated row
+                } else {
+                    row.push(Type.count(1));
+                    tmp[host] = aggr(sofar, row);
+                }
+            } //tmp is ready
+
+            (function() { //form data, update Env, and go to new page
+                var v = Object.keys(tmp);
+                var i, n = v.length;
+                var data = [], headv;
+
+                for (i = 0; i < n; i++) {
+                    data.push(tmp[v[i]]);
+                }
+                console.log(data);
+                //data is ready
+
+                headv = Env.curr().headv;
+                headv[nth] = "host";
+                headv.push("group count");
+                //headv is ready
+
+                Env.pushData(data, headv, null);
+                //data is pushed onto top of Env stack
+
+                Env.pageNavi("top");
+            })();
+        };
+    };
+
     return function() {
         var cell = getEnclosingTableCell(this);
         var tag = cell.tagName;
@@ -398,44 +486,35 @@ var tableCellOnClick = (function() {
         if (tag === "TH") {
             var ix = Number(cell.id.slice(1)), iy;
             var data = Env.curr().data, ny = data.length;
-            var button;
+            var button, buttonv = [];
 
-            if (selection.flipCol(ix)) {
+            if (selection.flipCol(ix)) { //selected
                 for (iy = 0; iy < ny; iy++) {
                     if (Type.isNA(data[iy][ix]))
                         continue;
                     else
                         break;
                 }
-                if (iy === ny || !Type.isSortable(data[iy][ix]))
+
+                if (iy === ny)
                     return;
-                console.log("create button");
 
-                button = DOC.createElement("button");
-                button.textContent = "sort by";
-                button.addEventListener("click", function() {
-                     var curr = Env.curr();
-                     var cmpfn, flag;
+                if (Type.isSortable(data[iy][ix])) {
+                    button = DOC.createElement("button");
+                    button.textContent = "sort by";
+                    button.addEventListener("click", sortByColumn(ix));
+                    buttonv.push(button);
+                }
 
-                     if (curr.sorted && curr.sorted.nth === ix) {
-                         flag = !curr.sorted.reverse;
-                     } else {
-                         flag = true;
-                     }
+                if (Type.isUrl(data[iy][ix])) {
+                    button = DOC.createElement("button");
+                    button.textContent = "group by hosts";
+                    button.addEventListener("click", groupByHosts(ix));
+                    buttonv.push(button);
+                }
 
-                     cmpfn = getCmpFn(function(row) {
-                         return row[ix];
-                     }, flag);
-
-                     Env.pushData(
-                         getCopy(curr.data).sort(cmpfn),
-                         curr.headv,
-                         { nth: ix, reverse: flag }
-                     );
-                     Env.pageNavi("top");
-                });
-                ctrlPanel.showAtHere(cell)([button]);
-            } else {
+                ctrlPanel.showAtHere(cell)(buttonv);
+            } else { //unselected
                 ctrlPanel.clear();
             }
         }
@@ -504,7 +583,6 @@ function consTABLE(headv, rowv) {
     return table;
 }
 
-
 function getVisitsFn(since) {
     return function (vv) {
         var r = [];
@@ -570,7 +648,7 @@ chrome.history.search(
          * Sort all the data by epoch. The original data is established.
          */
         var execAfterDataIsReady = function () {
-            Env.pushData(data, ["visit time", "url", "visit", "transition", "from", "gap"], {nth: 0, reverse: true});
+            Env.pushData(data, ["visit time", "url", "transition", "gap"], {nth: 0, reverse: true});
             Env.pageNavi("top");
 
             DOC.getElementById("navi_back").onclick = function () {
@@ -601,8 +679,7 @@ chrome.history.search(
                     var vv = getVisits(vv);
                     var i, n = vv.length;
                     var title = x.title;
-                    var url_obj = Type.url(url, //title? title.trim() :
-                                           "");
+                    var url_obj = Type.url.cons(url, title? title.trim() : "");
                     var time;
                     
                     for (i = 0; i < n; i++) {
@@ -610,9 +687,9 @@ chrome.history.search(
                         //if (vv[i].transition=="link") {
                         data.push([time? Type.epoch(time) : Type.NA,
                                    url_obj,
-                                   Type.count(vv[i].visitId),
+                                   //Type.count(vv[i].visitId),
                                    Type.str(vv[i].transition),
-                                   Type.count(vv[i].referringVisitId)
+                                   //Type.count(vv[i].referringVisitId)
                                   ]);
                         //}
                     }
