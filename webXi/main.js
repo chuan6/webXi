@@ -101,7 +101,7 @@ var Type = (function () {
                         }
                     }
                 }
-                return "" + v.toFixed(3) + unit_str;
+                return "" + v.toFixed(2) + unit_str;
             case na_t:
                 return "?";
             default:
@@ -340,7 +340,7 @@ var selection = (function() {
             html = DOC.getElementById("c" + nthCol);
             html.style.backgroundColor = prev? color_off : color_on;
 
-            cv[nthCol] = prev? false : true; //flip state
+            cv[nthCol] = (prev? false : true); //flip state
             return cv[nthCol];
         }
     };
@@ -696,7 +696,7 @@ chrome.history.search(
                     if (xs.empty) {
                         data.sort(cmpfn);
                         n = data.length;
-                        data[0].push(Type.duration(0));
+                        data[0].push(Type.duration(now - data[0][0].value.getTime()));
                         for (i = 1; i < n; i++) {
                             data[i].push(Type.duration(data[i-1][0].value.getTime() - data[i][0].value.getTime()));
                         }
