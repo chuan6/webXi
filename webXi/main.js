@@ -189,38 +189,6 @@ var Type = (function () {
         console.error("Error: Type.aggregate - invalid type.");
         return undefined;
       }
-    },
-    filterConfig: function(a) {
-      var ta = a.type,
-          elmt = DOC.createElement("div"),
-          input;
-
-      switch (ta) {
-      case url_t:
-      case str_t:
-        input = DOC.createElement("input");
-        input.setAttribute("type", "text");
-        elmt.appendChild(input);
-        break;
-      case duration_t:
-      case count_t:
-        input = DOC.createElement("input");
-        input.setAttribute("type", "number");
-        elmt.appendChild(input);
-        input = DOC.createElement("input");
-        input.setAttribute("type", "number");
-        elmt.appendChild(input);
-        break;
-      case epoch_t:
-        input = DOC.createElement("input");
-        input.setAttribute("type", "datetime-local");
-        elmt.appendChild(input);
-        input = DOC.createElement("input");
-        input.setAttribute("type", "datetime-local");
-        elmt.appendChild(input);
-        break;
-      }
-      return elmt;
     }
   };
 })();
@@ -477,7 +445,6 @@ var tableCellOnClick = (function() {
         if (sofar === undefined) {
           row[nth] = Type.str(host);
           row.push(Type.count(1)); //add "group count" column
-          console.log(row);
           tmp[host] = row; //set initial aggregated row
         } else {
           row.push(Type.count(1));
@@ -492,8 +459,7 @@ var tableCellOnClick = (function() {
 
         for (i = 0; i < n; i++) {
           data.push(tmp[v[i]]);
-        }
-        console.log(data);
+        } //console.log(data);
         //data is ready
 
         headv = Env.curr().headv;
@@ -539,8 +505,6 @@ var tableCellOnClick = (function() {
           pitem.addEventListener("click", groupByHosts(ix));
           pitemv.push(pitem);
         }
-        pitem = Type.filterConfig(data[iy][ix]);
-        pitemv.push(pitem);
 
         ctrlPanel.showAtHere(cell)(pitemv);
       } else { //unselected
