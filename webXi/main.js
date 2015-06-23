@@ -310,38 +310,32 @@ function getEnclosingTableCell(node) { //get enclosing table cell recursively
 }
 
 var selection = (function() {
-  var cv = [];
+  var cv = [], //column selection vector
+      rv = []; //row selection vector
   var color_on = "#B3D4FC", color_off = "white";
 
   return {
-    clear: function() {
-      var i, n = cv.length, html;
-
-      for (i = 0; i < n; i++) {
-        if (cv[i]) {
-          html = DOC.getElementById("c" + i);
-          html.style.backgroundColor = color_off;
-          cv[i] = false;
-        }
-      }
-    },
     reset: function() {
-      cv = [];
+      cv = []; rv = [];
     },
-    flipCol: function(nthCol) {
-      var data = Env.curr().data;
-      var prev; //previous selection state of the nthCol column
-      var html; //the html elements to be operated upon
+    flipCol: function(nth) {
+      var state = cv[nth];
+      var element = DOC.getElementById("c" + nth);
 
-      console.assert(nthCol>=0 && nthCol < data.length,
-                     "selection.flipCol: no " + nthCol +"th column in data.");
+      console.log(element);
+      console.log(cv);
 
-      prev = cv[nthCol];
-      html = DOC.getElementById("c" + nthCol);
-      html.style.backgroundColor = prev? color_off : color_on;
+      element.style.backgroundColor = (state? color_off : color_on);
 
-      cv[nthCol] = (prev? false : true); //flip state
-      return cv[nthCol];
+      return cv[nth] = (state? false : true); //flip state
+    },
+    flipRow: function(nth) {
+      var state = rv[nth];
+      var element = DOC.getElementById("r" + nth);
+
+      element.style.backgroundColor = (state? color_off : color_on);
+
+      return rv[nth] = (state? false : true); //flip state
     }
   };
 })();
@@ -383,7 +377,6 @@ var ctrlPanel = (function() {
         for (i = 0; i < n; i++) {
           panel.appendChild(pitemv[i]);
         }
-        console.log(elem);
         elem.appendChild(panel); //attach panel to target element
       };
     },
@@ -475,41 +468,57 @@ var tableCellOnClick = (function() {
     };
   };
 
-  return function() {
+  var handleClickInTH = function(nth, element) {
+    var ix = nth, iy;
+    var data = Env.curr().data, ny = data.length;
+    var pitem, pitemv = [];
+
+    if (selection.flipCol(ix)) { //selected
+      //skip leading NAs
+      for (iy = 0; iy < ny; iy++) {
+        if (Type.isNA(data[iy][ix])) continue;
+        else break;
+      }
+      if (iy === ny) return;
+
+      //add event listeners according to column properties
+      if (Type.isSortable(data[iy][ix])) {
+        pitem = DOC.createElement("button");
+        pitem.textContent = "sort by";
+        pitem.addEventListener("click", sortByColumn(ix));
+        pitemv.push(pitem);
+      }
+      if (Type.isUrl(data[iy][ix])) {
+        pitem = DOC.createElement("button");
+        pitem.textContent = "group by hosts";
+        pitem.addEventListener("click", groupByHosts(ix));
+        pitemv.push(pitem);
+      }
+
+      ctrlPanel.showAtHere(element)(pitemv);
+    } else { //unselected
+      ctrlPanel.reset();
+    }
+  };
+
+  var handleClickInTD = function(nth) {
+    console.log("row " + nth + ": "
+                + (selection.flipRow(nth)? "selected" : "unselected"));
+  };
+
+  return function() { //handle a click on a table cell
     var cell = getEnclosingTableCell(this);
     var tag = cell.tagName;
 
-    if (tag === "TH") {
-      var ix = Number(cell.id.slice(1)), iy;
-      var data = Env.curr().data, ny = data.length;
-      var pitem, pitemv = [];
-
-      if (selection.flipCol(ix)) { //selected
-        //skip leading NAs
-        for (iy = 0; iy < ny; iy++) {
-          if (Type.isNA(data[iy][ix])) continue;
-          else break;
-        }
-        if (iy === ny) return;
-
-        //add event listeners according to column properties
-        if (Type.isSortable(data[iy][ix])) {
-          pitem = DOC.createElement("button");
-          pitem.textContent = "sort by";
-          pitem.addEventListener("click", sortByColumn(ix));
-          pitemv.push(pitem);
-        }
-        if (Type.isUrl(data[iy][ix])) {
-          pitem = DOC.createElement("button");
-          pitem.textContent = "group by hosts";
-          pitem.addEventListener("click", groupByHosts(ix));
-          pitemv.push(pitem);
-        }
-
-        ctrlPanel.showAtHere(cell)(pitemv);
-      } else { //unselected
-        ctrlPanel.reset();
-      }
+    switch (tag) {
+    case "TH":
+      handleClickInTH(Number(cell.id.slice(1)), cell);
+      break;
+    case "TD":
+      handleClickInTD(Number(cell.parentNode.id.slice(1)));
+      break;
+    default:
+      console.error("Found " + tag + " instead of TH or TD.");
     }
   };
 })();
@@ -568,7 +577,9 @@ function consTABLE(headv, rowv) {
 
   // tr's
   for (j = 0; j < n; j++) {
-    tbody.appendChild(consTR(rowv[j]));
+    tr = consTR(rowv[j]);
+    tr.id = "r" + j;
+    tbody.appendChild(tr);
   }
   table.appendChild(tbody);
   table.style.borderCollapse = "collapse";
