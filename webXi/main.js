@@ -63,7 +63,7 @@ var Type = (function () {
         },
         show: function(x) {//return a readable string
             var v = x.value;
-            var unit_str, tmp;
+            var time_value, time_unit;
             
             switch (x.type) {
             case str_t:
@@ -71,37 +71,35 @@ var Type = (function () {
             case url_t:
                 return "<a href=\"" + v[0] + "\""
                     + " title=\"" + v[1] + "\">"
-                    + v[0].replace(/&/g, '&amp;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
+                    + v[0].replace(/[&"<>]/g, function (c) {
+                        return { '&': '&amp;',
+                                 '"': '&quot;',
+                                 '<': '&lt',
+                                 '>': '&gt'     }[c];
+                    })
                     + "</a>";
             case epoch_t:
                 return v.toLocaleString();
             case count_t:
                 return String(v);
             case duration_t:
-                tmp = v/1000; //ms -> s
-                if (tmp / 60 < 1) {
-                    unit_str = " s";
-                    v = tmp;
-                } else {
-                    tmp /= 60;
-                    if (tmp / 60 < 1) {
-                        unit_str = " m";
-                        v = tmp;
-                    } else {
-                        tmp /= 60;
-                        if (tmp / 24 < 1) {
-                            unit_str = " h";
-                            v = tmp;
-                        } else {
-                            unit_str = " d";
-                            v = tmp / 24;
-                        }
+                [time_value, time_unit] = function (n_ms) {
+                    var units = [[60, 's'],
+                                 [60, 'm'],
+                                 [24, 'h'],
+                                 [1, 'd']];
+                    var tmp = n_ms/1000;
+                    var i, n, s;
+
+                    for (i = 0; i < units.length; i++) {
+                        [n, s] = units[i];
+                        if (tmp < n)
+                            break;
+                        tmp /= n;
                     }
-                }
-                return "" + v.toFixed(2) + unit_str;
+                    return [tmp, s];
+                }(v);
+                return "" + time_value.toFixed(2) + " " + time_unit;
             case na_t:
                 return "?";
             default:
