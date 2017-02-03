@@ -1,23 +1,29 @@
-var DOC = document; //singleton; updated, but never replaced
+var DOC = document; // singleton; updated, but never replaced
 
 var Type = (function () {
-  var str_t = 0, url_t = 1, epoch_t = 2, count_t = 3, duration_t = 4;
-  var url_aggr_t = 10; //aggregation on urls returns url_aggr_t type
-  var na_t = 11; // type for value "not available"
+  const enum _t {
+    str,
+    url,
+    epoch,
+    count,
+    duration,
+    url_aggr, // aggregation on urls returns url_aggr type
+    na        // type for value "not available"
+  }
 
-  var na = { type: na_t };
+  var na = { type: _t.na };
 
   return {
     NA: na,
-    str: function(x) {//bind value with type str_t
-      return {type: str_t, value: "" + x};
+    str: function(x) {//bind value with type _t.str
+      return {type: _t.str, value: "" + x};
     },
     url: {
       cons: function(x, title) {
-        return { type: url_t, value: [x, title] };
+        return { type: _t.url, value: [x, title] };
       },
       getHost: function(v) {
-        console.assert(v.type === url_t, "Type mismatch.");
+        console.assert(v.type === _t.url, "Type mismatch.");
         var urlstr = v.value[0];
         var i, n = urlstr.length;
         var step = 0; //process is done through steps
@@ -51,24 +57,24 @@ var Type = (function () {
         return (step===3 && len>0 ? urlstr.slice(i-len, i) : "");
       }
     },
-    isUrl: function(x) { return x.type === url_t; },
-    epoch: function(x) {//bind value with type epoch_t
-      return { type: epoch_t, value: new Date(x) };
+    isUrl: function(x) { return x.type === _t.url; },
+    epoch: function(x) {//bind value with type _t.epoch
+      return { type: _t.epoch, value: new Date(x) };
     },
-    count: function(x) {//bind value with type count_t
-      return { type: count_t, value: Number(x) };
+    count: function(x) {//bind value with type _t.count
+      return { type: _t.count, value: Number(x) };
     },
-    duration: function(x) {//bind value with type duration_t
-      return { type: duration_t, value: x };
+    duration: function(x) {//bind value with type _t.duration
+      return { type: _t.duration, value: x };
     },
     show: function(x) {//return a readable string
       var v = x.value;
       var time_value, time_unit;
       
       switch (x.type) {
-      case str_t:
+      case _t.str:
         return v;
-      case url_t:
+      case _t.url:
         return "<a href=\"" + v[0] + "\""
           + " title=\"" + v[1] + "\">"
           + v[0].replace(/[&"<>]/g, function (c) {
@@ -78,11 +84,11 @@ var Type = (function () {
                      '>': '&gt'     }[c];
           })
           + "</a>";
-      case epoch_t:
+      case _t.epoch:
         return v.toLocaleString();
-      case count_t:
+      case _t.count:
         return String(v);
-      case duration_t:
+      case _t.duration:
         [time_value, time_unit] = function (n_ms) {
           var units = [[60, 's'],
                        [60, 'm'],
@@ -100,7 +106,7 @@ var Type = (function () {
           return [tmp, s];
         }(v);
         return "" + time_value.toFixed(2) + " " + time_unit;
-      case na_t:
+      case _t.na:
         return "?";
       default:
         console.log("Type.show: unhandled type - " + x.type);
@@ -117,15 +123,15 @@ var Type = (function () {
         return false;
 
       switch (ta) {
-      case str_t:
+      case _t.str:
         return a.value === b.value;
-      case url_t:
+      case _t.url:
         return a.value === b.value;
-      case epoch_t:
+      case _t.epoch:
         return a.value.getTime() === b.value.getTime;
-      case count_t:
+      case _t.count:
         return a.value === b.value;
-      case duration_t:
+      case _t.duration:
         return a.value === b.value;
       default:
         console.error("Error: Type.isEqual - invalid type.");
@@ -134,7 +140,7 @@ var Type = (function () {
     },
     isSortable: function(x) {
       var t = x.type;
-      return t===str_t || t===epoch_t || t===count_t || t===duration_t;
+      return t===_t.str || t===_t.epoch || t===_t.count || t===_t.duration;
     },
     cmp: function(a, b) {
       var ta, tb;
@@ -144,13 +150,13 @@ var Type = (function () {
         console.assert(ta===tb,
                        "Type.less: expect arguments of the same type.");
         switch (ta) {
-        case str_t:
+        case _t.str:
           return a.value < b.value? -1 : (a.value===b.value? 0 : 1);
-        case epoch_t:
+        case _t.epoch:
           return a.value.getTime() - b.value.getTime();
-        case count_t:
+        case _t.count:
           return a.value - b.value;
-        case duration_t:
+        case _t.duration:
           return a.value - b.value;
         default:
           return 0;
@@ -167,22 +173,22 @@ var Type = (function () {
       var ta = a.type;
       
       switch (ta) {
-      case url_t:
-        return { type: url_aggr_t, value: [a.value, b.value] };
-      case url_aggr_t:
-        return { type: url_aggr_t, value: a.value.push(b.value) };
-      case str_t:
-        return { type: str_t, value: a.value + ", " + b.value };
-      case epoch_t:
+      case _t.url:
+        return { type: _t.url_aggr, value: [a.value, b.value] };
+      case _t.url_aggr:
+        return { type: _t.url_aggr, value: a.value.push(b.value) };
+      case _t.str:
+        return { type: _t.str, value: a.value + ", " + b.value };
+      case _t.epoch:
         return {
-          type: epoch_t,
+          type: _t.epoch,
           value: a.value.getTime() < b.value.getTime() ?
             b.value : a.value
         };
-      case duration_t:
-        return { type: duration_t, value: a.value + b.value };
-      case count_t:
-        return { type: count_t, value: a.value + b.value };
+      case _t.duration:
+        return { type: _t.duration, value: a.value + b.value };
+      case _t.count:
+        return { type: _t.count, value: a.value + b.value };
       default:
         console.error("Error: Type.aggregate - invalid type.");
         return undefined;
