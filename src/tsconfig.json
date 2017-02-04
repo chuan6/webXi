@@ -1,0 +1,7 @@
+{
+  "files": ["main.ts"],
+  "compilerOptions": {
+    "target": "es6",
+    "outFile": "../webXi/main.js"
+  }
+}

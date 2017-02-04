@@ -1,5 +1,68 @@
 var DOC = document; // singleton; updated, but never replaced
 
+function getHost(s: string): string {
+  var c, cs = Array.from(s);
+  var i, n = cs.length;
+  var host_nchars;
+  var step = 0; //process is done through steps
+
+  ITER:
+  for (i = 0; i < n; i++) {
+    c = cs[i];
+    switch (step) {
+    case 0: //move towards the first colon;
+      if (c === ':') step++;
+      break;
+    case 1: //consume the following '/';
+      if (c === '/') {
+        step++; break;
+      } else {
+        break ITER;
+      }
+    case 2: //consume the following '/', and set begin
+      if (c === '/') {
+        host_nchars = 0; step++; break;
+      } else {
+        break ITER;
+      }
+    case 3: //move towards the next '/' or ':', or the end
+      if (c === '/' || c === ':')
+        break ITER;
+      host_nchars++; //count a char of the host
+    }
+  }
+  return (step===3 && host_nchars>0 ?
+          cs.slice(i-host_nchars, i).join("") :
+          "");
+}
+
+function htmlstr_a(url, title): string {
+  var safe = url.replace(/[&"<>]/g, function (c) {
+    return { '&': '&amp;',
+             '"': '&quot;',
+             '<': '&lt',
+             '>': '&gt'     }[c];
+  })
+  return `<a href=${url} title=${title}>${safe}</a>`;
+}
+
+function timestr_dura(ms): [number, string] {
+  var units = [[60, 's'],
+               [60, 'm'],
+               [24, 'h'],
+               [1, 'd']];
+  var tmp = ms/1000;
+  var n, s;
+
+  for (let i = 0; i < units.length; i++) {
+    [n, s] = units[i];
+    if (tmp < n)
+      break;
+    tmp /= n;
+  }
+  return [tmp, s];
+}
+
 var Type = (function () {
   const enum _t {
     str,
@@ -8,156 +71,100 @@ var Type = (function () {
     count,
     duration,
     url_aggr, // aggregation on urls returns url_aggr type
-    na        // type for value "not available"
+    not_avail // type for value "not available"
   }
 
-  var na = { type: _t.na };
+  interface str       { kind: _t.str,      value: string }
+  interface url       { kind: _t.url,      value: [string, string] }
+  interface epoch     { kind: _t.epoch,    value: Date }
+  interface count     { kind: _t.count,    value: number }
+  interface duration  { kind: _t.duration, value: number }
+  interface url_aggr  { kind: _t.url_aggr, value: [string, string][] }
+  interface not_avail { kind: _t.not_avail }
+
+  type cell = str | url | epoch | count | duration | url_aggr | not_avail;
+
+  var na = { kind: _t.not_avail };
 
   return {
     NA: na,
-    str: function(x) {//bind value with type _t.str
-      return {type: _t.str, value: "" + x};
+    str: function(x): str {
+      return { kind: _t.str, value: "" + x};
     },
-    url: {
-      cons: function(x, title) {
-        return { type: _t.url, value: [x, title] };
-      },
-      getHost: function(v) {
-        console.assert(v.type === _t.url, "Type mismatch.");
-        var urlstr = v.value[0];
-        var i, n = urlstr.length;
-        var step = 0; //process is done through steps
-        var x, len;
-
-        ITER:
-        for (i = 0; i < n; i++) {
-          x = urlstr[i];
-          switch (step) {
-          case 0: //move towards the first colon;
-            if (x === ':') step++;
-            break;
-          case 1: //consume the following '/';
-            if (x === '/') {
-              step++; break;
-            } else {
-              break ITER;
-            }
-          case 2: //consume the following '/', and set begin
-            if (x === '/') {
-              len = 0; step++; break;
-            } else {
-              break ITER;
-            }
-          case 3: //move towards the next '/' or ':', or the end
-            if (x === '/' || x === ':')
-              break ITER;
-            len++; //count a char of the host
-          }
-        }
-        return (step===3 && len>0 ? urlstr.slice(i-len, i) : "");
-      }
+    url: function(x, title): url {
+      return { kind: _t.url, value: [x, title] }
     },
-    isUrl: function(x) { return x.type === _t.url; },
-    epoch: function(x) {//bind value with type _t.epoch
-      return { type: _t.epoch, value: new Date(x) };
+    epoch: function(x): epoch {
+      return { kind: _t.epoch, value: new Date(x) };
     },
-    count: function(x) {//bind value with type _t.count
-      return { type: _t.count, value: Number(x) };
+    count: function(x): count {
+      return { kind: _t.count, value: Number(x) };
     },
-    duration: function(x) {//bind value with type _t.duration
-      return { type: _t.duration, value: x };
+    duration: function(x): duration {
+      return { kind: _t.duration, value: x };
     },
-    show: function(x) {//return a readable string
-      var v = x.value;
-      var time_value, time_unit;
+    urlGetHost: function(u: url): string {
+      return getHost(u.value[0]);
+    },
+    isUrl: function(x: cell): boolean {
+      return x.kind === _t.url;
+    },
+    show: function(x: cell): string {//return a readable string
+      var v;
+      var time_value: number, time_unit: string;
       
-      switch (x.type) {
+      switch (x.kind) {
       case _t.str:
-        return v;
-      case _t.url:
-        return "<a href=\"" + v[0] + "\""
-          + " title=\"" + v[1] + "\">"
-          + v[0].replace(/[&"<>]/g, function (c) {
-            return { '&': '&amp;',
-                     '"': '&quot;',
-                     '<': '&lt',
-                     '>': '&gt'     }[c];
-          })
-          + "</a>";
-      case _t.epoch:
-        return v.toLocaleString();
-      case _t.count:
-        return String(v);
-      case _t.duration:
-        [time_value, time_unit] = function (n_ms) {
-          var units = [[60, 's'],
-                       [60, 'm'],
-                       [24, 'h'],
-                       [1, 'd']];
-          var tmp = n_ms/1000;
-          var i, n, s;
+        return x.value;
 
-          for (i = 0; i < units.length; i++) {
-            [n, s] = units[i];
-            if (tmp < n)
-              break;
-            tmp /= n;
-          }
-          return [tmp, s];
-        }(v);
-        return "" + time_value.toFixed(2) + " " + time_unit;
-      case _t.na:
+      case _t.url:
+        v = x.value;
+        return htmlstr_a(v[0], v[1])
+
+      case _t.epoch:
+        return x.value.toLocaleString();
+
+      case _t.count:
+        return String(x.value);
+
+      case _t.duration:
+        [time_value, time_unit] = timestr_dura(x.value)
+        return time_value.toFixed(2) + " " + time_unit;
+
+      case _t.not_avail:
         return "?";
+
       default:
-        console.log("Type.show: unhandled type - " + x.type);
+        console.log("Type.show: unhandled type - " + x.kind);
         return "";
       }
     },
-    isNA: function(x) {
+    isNA: function(x): boolean {
       return x === na;
     },
-    isEqual: function(a, b) {
-      var ta = a.type;
-
-      if (ta !== b.type)
-        return false;
-
-      switch (ta) {
-      case _t.str:
-        return a.value === b.value;
-      case _t.url:
-        return a.value === b.value;
-      case _t.epoch:
-        return a.value.getTime() === b.value.getTime;
-      case _t.count:
-        return a.value === b.value;
-      case _t.duration:
-        return a.value === b.value;
+    isSortable: function(x: cell): boolean {
+      switch (x.kind) {
+      case _t.str: case _t.epoch: case _t.count: case _t.duration:
+        return true;
       default:
-        console.error("Error: Type.isEqual - invalid type.");
         return false;
       }
     },
-    isSortable: function(x) {
-      var t = x.type;
-      return t===_t.str || t===_t.epoch || t===_t.count || t===_t.duration;
-    },
-    cmp: function(a, b) {
-      var ta, tb;
+    cmp: function(a: cell, b: cell): number {
+      var bv;
       if (a !== na && b !== na) {
-        ta = a.type;
-        tb = b.type;
-        console.assert(ta===tb,
-                       "Type.less: expect arguments of the same type.");
-        switch (ta) {
+        console.assert(
+          a.kind===b.kind,
+          "Type.less: expect arguments of the same type.");
+        switch (a.kind) {
         case _t.str:
-          return a.value < b.value? -1 : (a.value===b.value? 0 : 1);
+          return a.value.localeCompare((b as str).value);
         case _t.epoch:
-          return a.value.getTime() - b.value.getTime();
+          return a.value.getTime() - (b as epoch).value.getTime();
         case _t.count:
-          return a.value - b.value;
+          return a.value - (b as count).value;
         case _t.duration:
-          return a.value - b.value;
+          return a.value - (b as duration).value;
         default:
           return 0;
         }
@@ -169,26 +176,43 @@ var Type = (function () {
         return -1;
       return 1; //b equals na, while a doesn't
     },
-    aggregate: function(a, b) {
-      var ta = a.type;
-      
-      switch (ta) {
+    aggregate: function(a: cell, b: cell): cell {
+      // note: always try create new value "from strach"
+      var tmp;
+      switch (a.kind) {
       case _t.url:
-        return { type: _t.url_aggr, value: [a.value, b.value] };
-      case _t.url_aggr:
-        return { type: _t.url_aggr, value: a.value.push(b.value) };
-      case _t.str:
-        return { type: _t.str, value: a.value + ", " + b.value };
-      case _t.epoch:
         return {
-          type: _t.epoch,
-          value: a.value.getTime() < b.value.getTime() ?
-            b.value : a.value
+          kind: _t.url_aggr,
+          value: [a.value, (b as url).value]
+        };
+      case _t.url_aggr:
+        // note: shallow copy of a.value, might cause problems
+        return {
+          kind: _t.url_aggr,
+          value: [...a.value, (b as url).value]
+        };
+      case _t.str:
+        return {
+          kind: _t.str,
+          value: a.value + ", " + (b as str).value
+        };
+      case _t.epoch:
+        tmp = (b as epoch).value
+        return {
+          kind: _t.epoch,
+          value: a.value.getTime() < tmp.getTime() ?
+            tmp : a.value
         };
       case _t.duration:
-        return { type: _t.duration, value: a.value + b.value };
+        return {
+          kind: _t.duration,
+          value: a.value + (b as duration).value
+        };
       case _t.count:
-        return { type: _t.count, value: a.value + b.value };
+        return {
+          kind: _t.count,
+          value: a.value + (b as count).value
+        };
       default:
         console.error("Error: Type.aggregate - invalid type.");
         return undefined;
@@ -566,7 +590,7 @@ var tableCellOnClick = (function() {
 
       for (i = 0; i < n; i++) {
         row = rows[i];
-        host = Type.url.getHost(row[nth]);
+        host = Type.urlGetHost(row[nth]);
         sofar = tmp[host];
         if (sofar === undefined) {
           row[nth] = Type.str(host);
@@ -875,7 +899,7 @@ chrome.history.search(
           var vv = getVisits(vv);
           var i, n = vv.length;
           var title = x.title;
-          var url_obj = Type.url.cons(url, title? title.trim() : "");
+          var url_obj = Type.url(url, title? title.trim() : "");
           var time;
           
           for (i = 0; i < n; i++) {
