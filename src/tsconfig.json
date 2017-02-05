@@ -1,7 +1,8 @@
 {
-  "files": ["main.ts", "type.ts"],
+  "files": ["main.ts", "type.ts", "components.tsx"],
   "compilerOptions": {
     "target": "es6",
+    "jsx": "react",
     "module": "amd",
     "outFile": "../webXi/main.js"
   }

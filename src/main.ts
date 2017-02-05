@@ -1,4 +1,5 @@
 import * as Type from "./type"
+import { renderNaviPanel } from "./components"
 
 var DOC = document; // singleton; updated, but never replaced
 
@@ -46,9 +47,6 @@ var Env = (function () {
     },
 
     pageNavi: (function () {
-      var back_button = <HTMLInputElement> DOC.getElementById("navi_back"),
-          next_button = <HTMLInputElement> DOC.getElementById("navi_next");
-
       return function (type) {
         var prev_table = DOC.getElementById("table");
 
@@ -69,8 +67,7 @@ var Env = (function () {
         console.assert(curr_page < len && curr_page >= 0,
                        "Env.pageNavi: curr_page: " + curr_page);
 
-        back_button.disabled = (curr_page === 0 ? true : false);
-        next_button.disabled = (curr_page === len - 1 ? true : false);
+        renderNaviPanel(DOC, curr_page, len);
 
         if (prev_table) {
           DOC.body.replaceChild(stack[curr_page].table, prev_table);

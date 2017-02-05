@@ -63,11 +63,30 @@
 /******/ 	__webpack_require__.p = "";
 
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 1);
+/******/ 	return __webpack_require__(__webpack_require__.s = 4);
 /******/ })
 /************************************************************************/
 /******/ ([
 /* 0 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [__webpack_require__, exports, __webpack_require__(2), __webpack_require__(3)], __WEBPACK_AMD_DEFINE_RESULT__ = function (require, exports, React, react_dom_1) {
+    "use strict";
+    function NaviPanel(props) {
+        return (React.createElement("div", { id: "navi_panel" },
+            React.createElement("button", { id: "navi_back", disabled: props.noBack }, "< BACK"),
+            React.createElement("button", { id: "navi_next", disabled: props.noNext }, "NEXT >")));
+    }
+    function renderNaviPanel(doc, i, n) {
+        react_dom_1.render(React.createElement(NaviPanel, { noBack: i === 0, noNext: i === (n - 1) }), doc.getElementById("navi_panel"));
+    }
+    exports.renderNaviPanel = renderNaviPanel;
+}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__),
+				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+
+
+/***/ }),
+/* 1 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [__webpack_require__, exports], __WEBPACK_AMD_DEFINE_RESULT__ = function (require, exports) {
@@ -277,10 +296,22 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
 
 
 /***/ }),
-/* 1 */
+/* 2 */
+/***/ (function(module, exports) {
+
+module.exports = React;
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports) {
+
+module.exports = ReactDOM;
+
+/***/ }),
+/* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
-var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [__webpack_require__, exports, __webpack_require__(0)], __WEBPACK_AMD_DEFINE_RESULT__ = function (require, exports, Type) {
+var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [__webpack_require__, exports, __webpack_require__(1), __webpack_require__(0)], __WEBPACK_AMD_DEFINE_RESULT__ = function (require, exports, Type, components_1) {
     "use strict";
     var DOC = document; // singleton; updated, but never replaced
     function peek(v) {
@@ -313,7 +344,6 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
                 len = curr_page + 1;
             },
             pageNavi: (function () {
-                var back_button = DOC.getElementById("navi_back"), next_button = DOC.getElementById("navi_next");
                 return function (type) {
                     var prev_table = DOC.getElementById("table");
                     //prepare
@@ -334,8 +364,7 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
                             break;
                     }
                     console.assert(curr_page < len && curr_page >= 0, "Env.pageNavi: curr_page: " + curr_page);
-                    back_button.disabled = (curr_page === 0 ? true : false);
-                    next_button.disabled = (curr_page === len - 1 ? true : false);
+                    components_1.renderNaviPanel(DOC, curr_page, len);
                     if (prev_table) {
                         DOC.body.replaceChild(stack[curr_page].table, prev_table);
                     }
