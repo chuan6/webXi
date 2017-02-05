@@ -318,7 +318,7 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
                     var prev_table = DOC.getElementById("table");
                     //prepare
                     selection.reset();
-                    ctrlPanel.reset();
+                    selectionPanel.reset();
                     switch (type) {
                         case "top":
                             curr_page = len - 1;
@@ -510,7 +510,7 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
             }
         };
     })();
-    var ctrlPanel = (function () {
+    var selectionPanel = (function () {
         var panel;
         var elemPos = function (elem) {
             var x = 0, y = 0;
@@ -646,19 +646,19 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
                     pitem.addEventListener("click", groupByHosts(ix));
                     pitemv.push(pitem);
                 }
-                ctrlPanel.showAtHere(element)(pitemv);
+                selectionPanel.showAtHere(element)(pitemv);
             }
             else {
-                ctrlPanel.reset();
+                selectionPanel.reset();
             }
         };
         var handleClickInTD = function (nth, element) {
             //When a row is clicked, its state is flipped to x.
             //Try finding from above the nearest row that is in state x.
-            //If there is one, add button A - "flip rows from above" to ctrl_panel.
+            //If there is one, add button A - "flip rows from above" to selection_panel.
             //Also try finding from below the nearest row that is in state x.
-            //If there is one, add button B - "flip rows from below" to ctrl_panel.
-            //Add button C - "flip rows from both above and below" to ctrl_panel
+            //If there is one, add button B - "flip rows from below" to selection_panel.
+            //Add button C - "flip rows from both above and below" to selection_panel
             //iff both button A and B have been added.
             var pitemv = [], pitem;
             var s = rows.flip(nth);
@@ -672,7 +672,7 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
                 pitem.addEventListener("click", function (event) {
                     event.stopPropagation();
                     rows.flipRangeEx(c, nth);
-                    ctrlPanel.reset();
+                    selectionPanel.reset();
                 });
                 pitemv.push(pitem);
             }
@@ -684,7 +684,7 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
                 pitem.addEventListener("click", function (event) {
                     event.stopPropagation();
                     rows.flipRangeEx(nth, f);
-                    ctrlPanel.reset();
+                    selectionPanel.reset();
                 });
                 pitemv.push(pitem);
             }
@@ -695,15 +695,15 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_
                     event.stopPropagation();
                     rows.flipRangeEx(c, nth);
                     rows.flipRangeEx(nth, f);
-                    ctrlPanel.reset();
+                    selectionPanel.reset();
                 });
                 pitemv.push(pitem);
             }
             if (pitemv.length === 0) {
-                ctrlPanel.reset();
+                selectionPanel.reset();
                 return;
             }
-            ctrlPanel.showAtHere(element)(pitemv, "flip rows from ");
+            selectionPanel.showAtHere(element)(pitemv, "flip rows from ");
         };
         return function () {
             var cell = getEnclosingTableCell(this);

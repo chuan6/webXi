@@ -54,7 +54,7 @@ var Env = (function () {
 
         //prepare
         selection.reset();
-        ctrlPanel.reset();
+        selectionPanel.reset();
 
         switch (type) {
         case "top":
@@ -276,7 +276,7 @@ var selection = (function() {
   };
 })();
 
-var ctrlPanel = (function() {//TODO maybe add timeout display
+var selectionPanel = (function() {//TODO maybe add timeout display
   var panel;
 
   var elemPos = function(elem) {//return global position as [x, y]
@@ -433,9 +433,9 @@ var tableCellOnClick = (function() {
         pitemv.push(pitem);
       }
 
-      ctrlPanel.showAtHere(element)(pitemv);
+      selectionPanel.showAtHere(element)(pitemv);
     } else { //unselected
-      ctrlPanel.reset();
+      selectionPanel.reset();
     }
   };
 
@@ -443,12 +443,12 @@ var tableCellOnClick = (function() {
     //When a row is clicked, its state is flipped to x.
     
     //Try finding from above the nearest row that is in state x.
-    //If there is one, add button A - "flip rows from above" to ctrl_panel.
+    //If there is one, add button A - "flip rows from above" to selection_panel.
 
     //Also try finding from below the nearest row that is in state x.
-    //If there is one, add button B - "flip rows from below" to ctrl_panel.
+    //If there is one, add button B - "flip rows from below" to selection_panel.
 
-    //Add button C - "flip rows from both above and below" to ctrl_panel
+    //Add button C - "flip rows from both above and below" to selection_panel
     //iff both button A and B have been added.
 
     var pitemv = [], pitem;
@@ -466,7 +466,7 @@ var tableCellOnClick = (function() {
       pitem.addEventListener("click", function(event) {
         event.stopPropagation();
         rows.flipRangeEx(c, nth);
-        ctrlPanel.reset();
+        selectionPanel.reset();
       });
       pitemv.push(pitem)
     }
@@ -479,7 +479,7 @@ var tableCellOnClick = (function() {
       pitem.addEventListener("click", function(event) {
         event.stopPropagation();
         rows.flipRangeEx(nth, f);
-        ctrlPanel.reset();
+        selectionPanel.reset();
       });
       pitemv.push(pitem);
     }
@@ -491,16 +491,16 @@ var tableCellOnClick = (function() {
         event.stopPropagation();
         rows.flipRangeEx(c, nth);
         rows.flipRangeEx(nth, f);
-        ctrlPanel.reset();
+        selectionPanel.reset();
       });
       pitemv.push(pitem);
     }
     
     if (pitemv.length === 0) {
-      ctrlPanel.reset();
+      selectionPanel.reset();
       return;
     }
-    ctrlPanel.showAtHere(element)(pitemv, "flip rows from ");
+    selectionPanel.showAtHere(element)(pitemv, "flip rows from ");
   };
 
   return function() { //handle a click on a table cell
