@@ -73,7 +73,7 @@
 var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [__webpack_require__, exports, __webpack_require__(2), __webpack_require__(3)], __WEBPACK_AMD_DEFINE_RESULT__ = function (require, exports, React, react_dom_1) {
     "use strict";
     function NaviPanel(props) {
-        return (React.createElement("div", { id: "navi_panel" },
+        return (React.createElement("div", null,
             React.createElement("button", { id: "navi_back", disabled: props.noBack }, "< BACK"),
             React.createElement("button", { id: "navi_next", disabled: props.noNext }, "NEXT >")));
     }

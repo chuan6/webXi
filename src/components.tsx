@@ -8,7 +8,7 @@ interface npProps {
 
 function NaviPanel(props: npProps) {
   return (
-    <div id="navi_panel">
+    <div>
       <button id="navi_back" disabled={props.noBack}>{"< BACK"}</button>
       <button id="navi_next" disabled={props.noNext}>{"NEXT >"}</button>
     </div>
@@ -17,5 +17,5 @@ function NaviPanel(props: npProps) {
 
 export function renderNaviPanel(doc: Document, i, n) {
   render(<NaviPanel noBack={i===0} noNext={i===(n-1)} />,
-                  doc.getElementById("navi_panel"));
+         doc.getElementById("navi_panel"));
 }
